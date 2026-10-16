@@ -39,7 +39,7 @@ async function call(path, body) {
 }
 
 export const api = {
-  create: (reds) => call("/api/games", { reds }),
+  create: (reds, game = "snooker") => call("/api/games", game === "pool" ? { game } : { reds }),
   get: (id, v) => call(`/api/games/${id}${v ? `?v=${v}` : ""}`),
   join: (id, name) => call(`/api/games/${id}/join`, { name }),
   act: (id, token, v, e) => call(`/api/games/${id}/act`, { token, v, e }),

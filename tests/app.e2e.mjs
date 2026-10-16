@@ -36,6 +36,16 @@ async function phone() {
   return page;
 }
 
+/** First start on a fresh phone: pick the game. */
+const pick = async (page, game) => {
+  await page.waitForSelector("#view-pick:not([hidden])");
+  await page.click(`#view-pick [data-game="${game}"]`);
+  await page.waitForSelector("#view-home:not([hidden])");
+};
+const racked = async (page) => {
+  await page.waitForSelector("#sheet >> text=rack the balls");
+  await page.click('#sheet button:has-text("The balls are racked")');
+};
 const tableReady = async (page) => {
   await page.waitForSelector("#sheet >> text=set up the table");
   await page.click('#sheet button:has-text("The table is ready")');
@@ -62,7 +72,9 @@ try {
   const p = await phone();
   await p.goto(SITE);
 
-  await step("start a game on this phone", async () => {
+  await step("first start: pick snooker, then start a game on this phone", async () => {
+    await pick(p, "snooker");
+    assert.equal(await p.locator("#reds-block").isVisible(), true);
     await p.click("#start-local");
     await p.fill("input[name=p0]", "Parth");
     await p.fill("input[name=p1]", "Rohan");
@@ -245,6 +257,7 @@ try {
 
   await step("start a shared game and get a link", async () => {
     await a.goto(SITE);
+    await pick(a, "snooker");
     await a.click('#reds-pick [data-reds="6"]');
     await a.click("#start-online");
     await a.waitForSelector("#join-card input[name=name]");
@@ -318,6 +331,125 @@ try {
     await c.waitForSelector("#view-game:not([hidden])");
     assert.match(await c.textContent("#frame-tag"), /watching/);
     assert.equal(await c.locator("#btn-miss").isDisabled(), true);
+  });
+
+  /* ---------------- 8-ball pool ---------------- */
+  const q = await phone();
+  await q.goto(SITE);
+  const pscore = (p) => q.locator(".player .p-score").nth(p).textContent();
+
+  await step("pool: pick 8-ball, rack the balls before the break", async () => {
+    await pick(q, "pool");
+    assert.match(await q.textContent("#learn-title"), /New to pool/);
+    assert.equal(await q.locator("#reds-block").isHidden(), true, "no reds in pool");
+    await q.click("#start-local");
+    await q.fill("input[name=p0]", "Asha");
+    await q.fill("input[name=p1]", "Ben");
+    await q.click('#break-pick [data-b="0"]');
+    await q.click("#local-form button[type=submit]");
+    assert.match(await q.textContent("#sheet"), /Game 1: rack the balls/);
+    assert.match(await q.textContent("#sheet"), /8 in the middle of the third row/);
+    await racked(q);
+    assert.match(await q.textContent("#frame-tag"), /8-ball/);
+    assert.match(await q.textContent("#guide"), /Break/);
+    assert.match(await q.textContent("#btn-miss"), /Log the break/);
+  });
+
+  await step("pool: an illegal break lets the other player choose; a re-rack asks to rack again", async () => {
+    await q.click("#btn-miss");
+    await q.click('#sheet .chips >> nth=1 >> button:has-text("No")');
+    assert.match(await q.textContent("#sheet .verdict"), /Ben chooses what happens next/);
+    assert.match(await q.textContent("#sheet .verdict"), /illegal break/);
+    await q.click("#sheet .verdict .btn");
+    assert.match(await q.textContent("#guide"), /Illegal break/);
+    assert.equal(await q.locator(".pball[data-n='1']").isDisabled(), true, "nothing to tap until Ben chooses");
+    await q.click('#guide button:has-text("Re-rack, Asha breaks again")');
+    await racked(q);
+  });
+
+  await step("pool: a good break keeps the breaker on; the first ball potted decides the groups", async () => {
+    await q.click("#btn-miss");
+    await q.click('#sheet .chips >> nth=0 >> button:has(.pdot[data-n="3"])');
+    await q.click('#sheet .chips >> nth=0 >> button:has(.pdot[data-n="12"])');
+    assert.match(await q.textContent("#sheet .verdict"), /Fair: Asha keeps going/);
+    await q.click("#sheet .verdict .btn");
+    assert.match(await q.textContent("#guide"), /Open table/);
+    await q.click('.pball[data-n="5"]');
+    assert.equal(await pscore(0), "5", "Asha has 5 solids left: 1, 2, 4, 6, 7 (the 3 and 5 are down)");
+    assert.equal(await pscore(1), "6");
+    assert.match(await q.textContent("#guide"), /You're solids/);
+  });
+
+  await step("pool: hitting the other group first is a foul: ball in hand anywhere", async () => {
+    await q.click("#btn-foul");
+    await q.click('#sheet .chips >> nth=0 >> button:has-text("A stripe")');
+    assert.match(await q.textContent("#sheet .verdict"), /Foul: ball in hand for Ben/);
+    assert.match(await q.textContent("#sheet .verdict"), /hit a stripe first/);
+    await q.click("#sheet .verdict .btn");
+    assert.match(await q.textContent("#guide"), /Ball in hand: put the white anywhere on the table/);
+    assert.match(await q.locator(".player.at").textContent(), /Ben/);
+  });
+
+  await step("pool: the other player's ball, a miss, then clearing to the 8 and winning", async () => {
+    await q.click('.pball[data-n="9"]');
+    assert.equal(await pscore(1), "5");
+    await q.click("#btn-miss");
+    for (const n of [1, 2, 4, 6, 7]) await q.click(`.pball[data-n="${n}"]`);
+    assert.match(await q.textContent("#guide"), /Pot the 8 to win/);
+    await q.click('.pball[data-n="8"]');
+    assert.match(await q.textContent("#sheet"), /Did it go in the pocket/);
+    await q.click('#sheet button:has-text("Yes: Asha wins")');
+    assert.match(await q.textContent("#guide"), /Asha wins/);
+    assert.match(await q.textContent(".players .frames"), /1–0/);
+    await q.click('#guide button:has-text("Play game 2 · Ben breaks")');
+    await racked(q);
+  });
+
+  await step("pool: the 8 too early loses, with the reason", async () => {
+    await q.click("#btn-miss");
+    await q.click('#sheet .chips >> nth=0 >> button:has(.pdot[data-n="2"])');
+    await q.click("#sheet .verdict .btn"); // Ben broke and potted the 2: still open
+    await q.click('.pball[data-n="8"]');
+    assert.match(await q.textContent("#sheet"), /The 8 isn't yours to pot yet/);
+    assert.match(await q.textContent("#sheet .verdict"), /Ben loses this game/);
+    await q.click("#sheet .close");
+  });
+
+  await step("pool: quick answers are pool answers", async () => {
+    await q.click(".ask-btn");
+    await q.fill(".ask-input", "what if I scratch on the 8");
+    assert.match(await q.locator("#sheet details.qa").first().textContent(), /scratch while shooting at the 8/);
+    await q.click("#sheet .close");
+  });
+
+  await step("pool: a shared 8-ball game, each side logs its own shots", async () => {
+    const x = await phone();
+    const y = await phone();
+    await x.goto(SITE);
+    await pick(x, "pool");
+    await x.click("#start-online");
+    await x.fill("#join-card input[name=name]", "Asha");
+    await x.click("#join-card button[type=submit]");
+    await x.waitForSelector("text=Waiting for the other side");
+    assert.match(await x.textContent("#join-card"), /8-ball pool/);
+    const plink = await x.textContent(".share-link");
+    await y.goto(plink);
+    assert.match(await y.textContent("#join-card"), /8-ball pool/);
+    await y.fill("#join-card input[name=name]", "Ben");
+    await y.click("#join-card button[type=submit]");
+    await y.waitForSelector("#view-game:not([hidden])");
+    await x.waitForSelector("#view-game:not([hidden])", { timeout: 8000 });
+    await racked(x);
+    await racked(y);
+    const xBreaks = (await x.locator(".player.at .p-name").textContent()).includes("Asha");
+    const [brk, other] = xBreaks ? [x, y] : [y, x];
+    assert.equal(await other.locator("#btn-miss").isDisabled(), true);
+    await brk.click("#btn-miss");
+    await brk.click('#sheet .chips >> nth=0 >> button:has(.pdot[data-n="4"])');
+    await brk.click("#sheet .verdict .btn");
+    await other.waitForFunction(() => document.querySelector('.pball[data-n="4"]').classList.contains("gone"), null, { timeout: 8000 });
+    await brk.click('.pball[data-n="10"]');
+    await other.waitForSelector("#guide >> text=stripes", { timeout: 8000 });
   });
 
   assert.deepEqual(errors, []);

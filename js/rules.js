@@ -3,6 +3,7 @@
 // escapes it before display, so player names can never inject markup.
 
 import { COLOURS, VALUE, valueOn, remaining, standing, maxBreak } from "./engine.js";
+import { BASE_SYN, makeSearch } from "./search.js";
 
 /** What the answers need to know about the game right now (works with no game too). */
 export function context(s, players = ["You", "Your opponent"]) {
@@ -655,47 +656,19 @@ export const QA = [
 ];
 
 const SYN = [
-  [/\bcue ?ball\b|\bcueball\b|\bcue\b/g, "white"],
+  ...BASE_SYN,
+  [/\bcue\b/g, "white"],
   [/\bscratch(ed)?\b|\bin ?off\b/g, "white pot in-off"],
   [/\bcolou?red\b|\bcolou?rs?\b/g, "colour"],
-  [/\bnominat\w*|\bcall(ed|ing|s)?\b|\bdeclar\w*/g, "call"],
-  [/\bmiss(ed|es|ing)?\b/g, "miss"],
-  [/\bsink(s|ing)?\b|\bsank\b|\bpocket(ed|s)?\b|\bpot(s|ted|ting)?\b/g, "pot"],
   [/\brespot\w*|\bre-spot\w*|\bput back\b/g, "respot back"],
   [/\breds\b/g, "red"],
   [/\bplant\w*|\bcombo\w*|\bcombination\w*/g, "plant"],
   [/\b(two|2) reds?\b/g, "two reds"],
   [/\b(yellow|green|brown|blue|pink|black)\b/g, "colour $1"],
-  [/\bpenalt\w*/g, "penalty foul"],
 ];
-const STOP = new Set("a an the i if my me what whats is it do does can could should when where who how to of on in and or with by for at be am are was will get gets got".split(" "));
-
-const tokens = (text) => {
-  let t = ` ${text.toLowerCase().replace(/[’']/g, "")} `;
-  for (const [re, to] of SYN) t = t.replace(re, ` ${to} `);
-  return t.split(/[^a-z0-9-]+/).filter((w) => w && !STOP.has(w));
-};
-const index = QA.map((e) => ({ e, keys: new Set(tokens(e.keys)), q: new Set(tokens(e.q)) }));
 
 /** Best matches for a free-text question, best first. */
-export function search(query, limit = 4) {
-  const words = tokens(query);
-  if (!words.length) return [];
-  return index
-    .map(({ e, keys, q }) => {
-      let score = 0;
-      for (const w of words) {
-        if (q.has(w)) score += 2;
-        else if (keys.has(w)) score += 1.5;
-        else if (w.length > 3 && [...keys].some((k) => k.startsWith(w) || w.startsWith(k))) score += 0.5;
-      }
-      return { e, score: score / Math.sqrt(q.size + 2) };
-    })
-    .filter((r) => r.score > 0.4)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit)
-    .map((r) => r.e);
-}
+export const search = makeSearch(QA, SYN);
 
 /** Questions worth suggesting for the situation at the table. */
 export function suggestions(s) {

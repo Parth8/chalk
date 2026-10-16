@@ -1,7 +1,7 @@
 // Renders the app icon in every size the site needs, from the one mark below.
 //   NODE_PATH=$(npm root -g) node tools/build-icons.mjs
 //
-// The mark: a red and a black ball on the cloth, the two you'll tap most.
+// The mark: a snooker red and a pool 8-ball on the cloth: the two games in one app.
 
 import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -25,7 +25,9 @@ export function mark({ full = false, k = 1, id = "s" } = {}) {
   <g transform="translate(32 32) scale(${k}) translate(-32 -32)">
     <ellipse cx="44" cy="25.5" rx="11" ry="4" fill="url(#${id}s)"/>
     <circle cx="42" cy="20" r="9" fill="url(#${id}k)"/>
-    <circle cx="39" cy="16.6" r="2.2" fill="#fff" fill-opacity="0.8"/>
+    <circle cx="42" cy="20" r="4.1" fill="#fbfaf5"/>
+    <text x="42" y="22.3" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="6.2" text-anchor="middle" fill="#111">8</text>
+    <circle cx="38.6" cy="15.8" r="1.6" fill="#fff" fill-opacity="0.7"/>
     <ellipse cx="27" cy="47" rx="17" ry="5.5" fill="url(#${id}s)"/>
     <circle cx="25" cy="38" r="14" fill="url(#${id}r)"/>
     <circle cx="20.2" cy="32.6" r="3.4" fill="#fff" fill-opacity="0.85"/>

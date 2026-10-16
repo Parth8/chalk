@@ -9,8 +9,8 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://snooker-api.8parthaggarwal1999.workers.dev; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
 
-  <title>Snooker scorer</title>
-  <meta name="description" content="Tap the ball you potted. Scores, breaks, fouls, where to re-spot each colour and quick rule answers. Share a link and both phones stay in step.">
+  <title>Chalk: snooker &amp; pool</title>
+  <meta name="description" content="Snooker and 8-ball pool for people who've never played: tap what happens and the app keeps the score, the order and the rules. Share a link and both phones stay in step.">
   <meta name="theme-color" content="#131a17">
   <meta name="color-scheme" content="dark light">
   <script src="js/theme.js"></script>
@@ -19,7 +19,7 @@
   <!-- Add to home screen: opens full-screen, like an app -->
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-title" content="Snooker">
+  <meta name="apple-mobile-web-app-title" content="Chalk">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -28,27 +28,55 @@
 </head>
 <body>
   <main id="app">
+    <!-- ============ Pick a game (first start) ============ -->
+    <section id="view-pick" class="view" hidden>
+      <header class="home-head">
+        <span class="logo" aria-hidden="true"></span>
+        <h1>Chalk</h1>
+        <p class="lede">Snooker and pool, scored and explained. Never played? No problem: tap what happens and the app does the rest.</p>
+      </header>
+      <p class="label pick-label">What are you playing?</p>
+      <button type="button" class="card pick" data-game="snooker">
+        <span class="pick-art snooker-art" aria-hidden="true"><i data-ball="red"></i><i data-ball="red"></i><i data-ball="yellow"></i><i data-ball="blue"></i><i data-ball="pink"></i><i data-ball="black"></i></span>
+        <span class="pick-name">Snooker</span>
+        <span class="note">15 reds and 6 colours on a big table. Points for every ball.</span>
+      </button>
+      <button type="button" class="card pick" data-game="pool">
+        <span class="pick-art pool-art" aria-hidden="true"></span>
+        <span class="pick-name">8-ball pool</span>
+        <span class="note">Also called pool or billiards. Solids and stripes, then the black 8 to win.</span>
+      </button>
+      <p class="note center">You can switch any time from the home screen.</p>
+    </section>
+
     <!-- ============ Home ============ -->
     <section id="view-home" class="view" hidden>
       <header class="home-head">
         <span class="logo" aria-hidden="true"></span>
-        <h1>Snooker</h1>
-        <p class="lede">Never played? No problem. Tap what happens and the app keeps the score, the order and the rules.</p>
+        <h1>Chalk</h1>
+        <p class="lede" id="home-lede">Never played? No problem. Tap what happens and the app keeps the score, the order and the rules.</p>
       </header>
 
+      <div class="seg game-pick" role="radiogroup" aria-label="Game" id="game-pick">
+        <button type="button" role="radio" data-game="snooker" aria-checked="true">Snooker</button>
+        <button type="button" role="radio" data-game="pool" aria-checked="false">8-ball pool</button>
+      </div>
+
       <button type="button" class="card learn" data-open="learn">
-        <span class="learn-title">New to snooker?</span>
-        <span class="note">How it works in 1 minute: the balls, the order, what a foul is. The app guides you at every shot.</span>
+        <span class="learn-title" id="learn-title">New to snooker?</span>
+        <span class="note" id="learn-note">How it works in 1 minute: the balls, the order, what a foul is. The app guides you at every shot.</span>
       </button>
 
       <div class="card resume" id="resume" hidden></div>
 
       <div class="card">
-        <p class="label" id="reds-label">Reds on the table</p>
-        <div class="seg" role="radiogroup" aria-labelledby="reds-label" id="reds-pick">
-          <button type="button" role="radio" data-reds="15" aria-checked="true">15</button>
-          <button type="button" role="radio" data-reds="10" aria-checked="false">10</button>
-          <button type="button" role="radio" data-reds="6" aria-checked="false">6</button>
+        <div id="reds-block">
+          <p class="label" id="reds-label">Reds on the table</p>
+          <div class="seg" role="radiogroup" aria-labelledby="reds-label" id="reds-pick">
+            <button type="button" role="radio" data-reds="15" aria-checked="true">15</button>
+            <button type="button" role="radio" data-reds="10" aria-checked="false">10</button>
+            <button type="button" role="radio" data-reds="6" aria-checked="false">6</button>
+          </div>
         </div>
         <button type="button" class="btn primary big" id="start-online">
           <span>Start a shared game</span>

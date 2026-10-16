@@ -1,7 +1,7 @@
 {
-  "name": "Snooker scorer",
-  "short_name": "Snooker",
-  "description": "Tap the ball you potted. Scores, breaks, fouls, where to re-spot each colour and quick rule answers. Share a link and both phones stay in step.",
+  "name": "Chalk: snooker & pool",
+  "short_name": "Chalk",
+  "description": "Snooker and 8-ball pool for people who've never played: tap what happens and the app keeps the score, the order and the rules. Share a link and both phones stay in step.",
   "id": "./",
   "start_url": "./",
   "scope": "./",

@@ -2,7 +2,7 @@
 // The shared-game API is never cached. Bump VERSION with every release, so phones that
 // already have the app swap the whole cache at once instead of file by file.
 
-const VERSION = "snooker-v5";
+const VERSION = "chalk-v6";
 const FILES = [
   "./",
   "index.html",
@@ -11,6 +11,11 @@ const FILES = [
   "js/engine.js",
   "js/rules.js",
   "js/table.js",
+  "js/search.js",
+  "js/pool.js",
+  "js/pool-rules.js",
+  "js/pool-table.js",
+  "js/pool-ui.js",
   "js/api.js",
   "js/install.js",
   "js/guide.js",

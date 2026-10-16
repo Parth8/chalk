@@ -185,3 +185,52 @@ test("restarting needs both sides: one asks, the other agrees or says no", async
   assert.deepEqual(r.body.game.frames, [{ breaker: at, events: [] }]);
   assert.equal((await g.act(at, { t: "restart-no" })).status, 409, "nothing to cancel");
 });
+
+test("8-ball games: made, joined and checked with the pool rules", async () => {
+  const env = setup();
+  const made = await call(env, "POST", "/api/games", { game: "pool" });
+  assert.equal(made.body.game.kind, "pool");
+  const id = made.body.id;
+  const a = await call(env, "POST", `/api/games/${id}/join`, { name: "Asha" });
+  const b = await call(env, "POST", `/api/games/${id}/join`, { name: "Ben" });
+  assert.equal(b.body.game.kind, "pool");
+  const tok = [a.body.token, b.body.token];
+  let v = b.body.v;
+  const at = b.body.game.frames[0].breaker;
+  const act = async (seat, e) => {
+    const r = await call(env, "POST", `/api/games/${id}/act`, { token: tok[seat], v, e });
+    if (r.status === 200) v = r.body.v;
+    return r;
+  };
+  assert.equal((await act(1 - at, { t: "shot", potted: [3], rail: true })).status, 403, "only the breaker breaks");
+  assert.equal((await act(at, { t: "shot", potted: [3, 3], rail: true })).status, 400, "no duplicate balls");
+  assert.equal((await act(at, { t: "shot", potted: [16], rail: true })).status, 400);
+  assert.equal((await act(at, { t: "pot", ball: "red" })).status, 400, "snooker moves don't fit pool");
+  // illegal break: the other side chooses
+  let r = await act(at, { t: "shot", potted: [], rail: false });
+  assert.equal(r.status, 200);
+  assert.equal((await act(at, { t: "choose", opt: "accept" })).status, 403, "the breaker doesn't choose");
+  assert.equal((await act(1 - at, { t: "choose", opt: "spot8" })).status, 409, "not an option here");
+  r = await act(1 - at, { t: "choose", opt: "rerack-them" });
+  assert.equal(r.status, 200);
+  // legal break, then the other side's open table: pot a stripe and they're stripes
+  await act(at, { t: "shot", potted: [], rail: true });
+  r = await act(1 - at, { t: "shot", first: 12, potted: [12], rail: true, junk: 1 });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.game.frames[0].events.at(-1), { t: "shot", first: 12, potted: [12], rail: true, by: 1 - at }, "extra fields dropped");
+  assert.equal((await act(1 - at, { t: "shot", first: 8, potted: [8], rail: true, eight: "called" })).status, 200, "the 8 too early is legal to log: it loses");
+  const g = await call(env, "GET", `/api/games/${id}`);
+  const s = (await import("../js/pool.js")).replayFrame({ frames: g.body.game.frames });
+  assert.equal(s.over, true);
+  assert.equal(s.winner, at);
+});
+
+test("a database from before pool gets the kind column, and old games stay snooker", async () => {
+  const env = setup();
+  env.DB.db.exec("CREATE TABLE games (id TEXT PRIMARY KEY, v INTEGER NOT NULL, reds INTEGER NOT NULL, names TEXT NOT NULL, keys TEXT NOT NULL, frames TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)");
+  env.DB.db.exec(`INSERT INTO games VALUES ('abcdefghjk', 1, 15, '["A",null]', '[null,null]', '[]', 0, ${Date.now()})`);
+  const r = await call(env, "GET", "/api/games/abcdefghjk");
+  assert.equal(r.status, 200);
+  assert.equal(r.body.game.kind, "snooker");
+  assert.equal((await call(env, "POST", "/api/games", { game: "pool" })).body.game.kind, "pool");
+});

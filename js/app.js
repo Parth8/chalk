@@ -3,13 +3,20 @@
 
 import { BALLS, COLOURS, VALUE, ballsOn, firstOn, judgePot, judgeShot, OTHER_FOULS, replayFrame, framesWon, newMatch, nextFrame, standing } from "./engine.js";
 import { QA, TOPICS, context, search, suggestions, byId } from "./rules.js";
+import * as SNK from "./engine.js";
+import * as SNKQ from "./rules.js";
+import * as POOL from "./pool.js";
+import * as POOLQ from "./pool-rules.js";
+import { poolUI } from "./pool-ui.js";
+import { poolSVG } from "./pool-table.js";
 import { tableSVG, setupSVG, spotOrder, SPOT_WORDS } from "./table.js";
 import { api, seatFor, keepSeat, forgetSeat, seats } from "./api.js";
 import { installWay, installPlace, appleGuide, canOpenSafari, onInstallChange, promptInstall } from "./install.js";
 import { guideArt } from "./guide.js";
 
 const $ = (sel) => document.querySelector(sel);
-const LOCAL = "snooker.local";
+const LOCAL = { snooker: "snooker.local", pool: "chalk.pool.local" }; // the snooker key predates pool
+const GAME = "chalk.game";
 const NAMES = "snooker.names";
 const POLL_MS = 2500;
 const cap = (w) => w[0].toUpperCase() + w.slice(1);
@@ -73,9 +80,14 @@ const buzz = () => navigator.vibrate?.(8);
 let mode = null; // "local" | "online"
 let match = null; // { players, reds, frames: [{ breaker, events }] }
 const online = { id: null, v: 0, seat: null, token: null, game: null, busy: false, timer: null, down: false, queue: Promise.resolve(), pending: 0, run: 0 };
-const ui = { spotKey: "", spotStep: 0, spotFall: 0, foulDone: "", seen: new Set(), setupDone: new Set(), spotDone: "", sheetKind: null, sheetLocked: false, redsPick: 15, breakPick: "0", watch: null };
+const ui = { spotKey: "", spotStep: 0, spotFall: 0, foulDone: "", seen: new Set(), game: null, gateKey: "", setupDone: new Set(), spotDone: "", sheetKind: null, sheetLocked: false, redsPick: 15, breakPick: "0", watch: null };
 
-const state = () => replayFrame(match);
+const gameOf = (m) => (m && m.game === "pool" ? "pool" : "snooker");
+const isPool = (m = match) => gameOf(m) === "pool";
+const eng = (m = match) => (isPool(m) ? POOL : SNK);
+/** Quick answers for the game being played (or picked on the home screen). */
+const rulebook = () => (match ? isPool() : ui.game === "pool") ? POOLQ : SNKQ;
+const state = () => eng().replayFrame(match);
 const names = () => (match ? match.players.map((n, i) => n || `Player ${i + 1}`) : ["Player 1", "Player 2"]);
 const frameNo = () => match.frames.length;
 const eventsNow = () => match.frames[match.frames.length - 1].events;
@@ -84,8 +96,8 @@ const evKey = () => `${frameNo()}:${eventsNow().length}`;
 function can(what, s = state()) {
   const ev = eventsNow();
   const rules = {
-    turn: !s.over && !s.toss,
-    toss: s.toss,
+    turn: !s.over && !s.toss && !s.choice,
+    toss: !!s.toss,
     next: s.over,
     concede: !s.over,
     undo: ev.length > 0 || (mode === "local" && match.frames.length > 1),
@@ -120,10 +132,22 @@ function goHome() {
   show("home");
 }
 
+function pickGame(game) {
+  ui.game = game;
+  try {
+    localStorage.setItem(GAME, game);
+  } catch {}
+}
+
 function renderHome() {
+  const pool = ui.game === "pool";
+  for (const b of $("#game-pick").children) b.setAttribute("aria-checked", String(b.dataset.game === ui.game));
+  $("#reds-block").hidden = pool;
+  $("#learn-title").textContent = pool ? "New to pool?" : "New to snooker?";
+  $("#learn-note").textContent = pool ? "How 8-ball works in 1 minute: solids and stripes, fouls, and the 8. The app guides you at every shot." : "How it works in 1 minute: the balls, the order, what a foul is. The app guides you at every shot.";
   const resume = $("#resume");
   resume.replaceChildren();
-  const saved = loadLocal();
+  const saved = loadLocal(ui.game);
   const parts = [];
   const item = (open, label, sub, removeLabel, remove) =>
     h(
@@ -133,12 +157,12 @@ function renderHome() {
       btn("✕", remove, "icon-btn", { "aria-label": removeLabel, title: removeLabel })
     );
   if (saved) {
-    const s = replayFrame(saved);
+    const s = eng(saved).replayFrame(saved);
     const n = saved.players;
     parts.push(
-      item(() => openLocal(saved), `Carry on: ${n[0]} v ${n[1]}`, `Game ${saved.frames.length} · ${s.scores[0]}–${s.scores[1]}${s.over ? " · finished" : ""}`, "Delete this match", () =>
+      item(() => openLocal(saved), `Carry on: ${n[0]} v ${n[1]}`, `${isPool(saved) ? "8-ball" : "Snooker"} · game ${saved.frames.length}${isPool(saved) ? ` · games ${eng(saved).framesWon(saved).join("–")}` : ` · ${s.scores[0]}–${s.scores[1]}`}${s.over ? " · finished" : ""}`, "Delete this match", () =>
         confirmSheet("Delete this match?", `${n[0]} v ${n[1]}: every game and score on this phone goes.`, "Delete", () => {
-          deleteLocal();
+          deleteLocal(gameOf(saved));
           renderHome();
         })
       )
@@ -161,19 +185,19 @@ function renderHome() {
   for (const b of $("#reds-pick").children) b.setAttribute("aria-checked", String(+b.dataset.reds === ui.redsPick));
 }
 
-function deleteLocal() {
+function deleteLocal(game = gameOf(match)) {
   try {
-    localStorage.removeItem(LOCAL);
+    localStorage.removeItem(LOCAL[game]);
   } catch {}
 }
 
 /* ---------------- this phone ---------------- */
 
-function loadLocal() {
+function loadLocal(game) {
   try {
-    const m = JSON.parse(localStorage.getItem(LOCAL) || "null");
-    if (!m || !Array.isArray(m.frames) || !m.frames.length) return null;
-    replayFrame(m); // throws if damaged
+    const m = JSON.parse(localStorage.getItem(LOCAL[game]) || "null");
+    if (!m || !Array.isArray(m.frames) || !m.frames.length || gameOf(m) !== game) return null;
+    eng(m).replayFrame(m); // throws if damaged
     return m;
   } catch {
     return null;
@@ -181,7 +205,7 @@ function loadLocal() {
 }
 function saveLocal() {
   try {
-    localStorage.setItem(LOCAL, JSON.stringify(match));
+    localStorage.setItem(LOCAL[gameOf(match)], JSON.stringify(match));
   } catch {}
 }
 
@@ -215,7 +239,7 @@ function startLocal(e) {
   } catch {}
   let breaker = ui.breakPick === "toss" ? (Math.random() < 0.5 ? 0 : 1) : +ui.breakPick;
   if (ui.breakPick === "toss") toast(`Coin toss: ${players[breaker]} breaks`);
-  openLocal(newMatch({ players, reds: ui.redsPick, breaker }));
+  openLocal(ui.game === "pool" ? POOL.newMatch({ players, breaker }) : newMatch({ players, reds: ui.redsPick, breaker }));
 }
 
 function openLocal(m) {
@@ -234,7 +258,7 @@ async function startOnline() {
   const b = $("#start-online");
   b.disabled = true;
   try {
-    const r = await api.create(ui.redsPick);
+    const r = await api.create(ui.redsPick, ui.game);
     history.pushState(null, "", `?g=${r.id}`);
     await openOnline(r.id);
   } catch (err) {
@@ -281,7 +305,7 @@ function applyServer(r) {
   if (asked && now && !now.ask && !now.events.length) ui.setupDone.clear();
   online.v = r.v;
   online.game = r.game;
-  match = { players: r.game.players, reds: r.game.reds, frames: r.game.frames };
+  match = { game: r.game.kind === "pool" ? "pool" : "snooker", players: r.game.players, reds: r.game.reds, frames: r.game.frames };
   if (online.seat !== null) keepSeat(online.id, online.seat, online.token, r.game.players);
   route();
 }
@@ -307,7 +331,7 @@ async function shareLink() {
   const url = shareUrl();
   if (navigator.share) {
     try {
-      await navigator.share({ title: "Snooker", text: "Join my snooker game:", url });
+      await navigator.share({ title: "Chalk", text: isPool() ? "Join my 8-ball pool game:" : "Join my snooker game:", url });
       return;
     } catch (err) {
       if (err && err.name === "AbortError") return;
@@ -335,7 +359,7 @@ function renderJoin() {
   if (online.seat !== null) {
     card.replaceChildren(
       h("h2", {}, h("span", { class: "pulse-dot", "aria-hidden": "true" }), "Waiting for the other side"),
-      h("p", { class: "note", text: `Send this link to your opponent. They open it, type their name, and the coin toss decides who breaks. ${g.reds} reds.` }),
+      h("p", { class: "note", text: `Send this link to your opponent. They open it, type their name, and the coin toss decides who breaks. ${g.kind === "pool" ? "8-ball pool." : `Snooker, ${g.reds} reds.`}` }),
       seatsRow,
       link,
       h("div", { class: "row" }, btn("Share link", shareLink, "btn primary"))
@@ -382,7 +406,7 @@ function renderJoin() {
   form.style.cssText = "display:flex;flex-direction:column;gap:12px";
   card.replaceChildren(
     h("h2", { text: full ? "Both sides are playing" : g.players.some(Boolean) ? `${g.players.find(Boolean)} invited you` : "New snooker game" }),
-    h("p", { class: "note", text: full ? "You can watch the score live." : `${g.reds} reds. Type your name and you're in. Each side scores their own turns; everyone sees everything.` }),
+    h("p", { class: "note", text: full ? "You can watch the score live." : `${g.kind === "pool" ? "8-ball pool" : `Snooker, ${g.reds} reds`}. Type your name and you're in. Each side scores their own turns; everyone sees everything.` }),
     seatsRow,
     full ? null : form,
     g.frames.length
@@ -443,7 +467,7 @@ async function dispatch(e) {
   if (mode === "local") {
     const before = structuredClone(match);
     if (e.t === "undo") undoLocal();
-    else if (e.t === "next") match = nextFrame(match);
+    else if (e.t === "next") match = eng().nextFrame(match);
     else eventsNow().push(e);
     try {
       state();
@@ -458,7 +482,7 @@ async function dispatch(e) {
   // shared game: show it straight away, then send moves to the Worker one at a time, in order.
   // (Sent together, a later move can arrive first: a black before the red it follows.)
   if (e.t === "undo") eventsNow().pop();
-  else if (e.t === "next") match = nextFrame(match);
+  else if (e.t === "next") match = eng().nextFrame(match);
   else if (e.t !== "restart" && e.t !== "restart-no") eventsNow().push({ ...e, by: online.seat });
   render();
   const run = online.run;
@@ -523,6 +547,7 @@ function onBall(ball) {
 function render() {
   if (!match || !match.frames.length) return;
   const s = state();
+  if (isPool()) return renderPool(s);
   renderTag(s);
   renderPlayers(s);
   renderStanding(s);
@@ -531,6 +556,86 @@ function render() {
   renderActions(s);
   renderLog(s);
   gates(s);
+}
+
+/* ---------------- 8-ball pool: the shared shell, pool's own pieces ---------------- */
+
+const pool = poolUI({
+  h,
+  btn,
+  openSheet: (...a) => openSheet(...a),
+  closeSheet: () => closeSheet(),
+  dispatch: (e) => dispatch(e),
+  toast: (t) => toast(t),
+  can: (w, s) => can(w, s),
+  state: () => state(),
+  names: () => names(),
+  frameNo: () => frameNo(),
+  evKey: () => evKey(),
+  match: () => match,
+  mode: () => mode,
+  online,
+  render: () => render(),
+  learn: (i) => learnSheet(i),
+});
+
+function renderPool(s) {
+  const n = names();
+  renderTag(s);
+  const won = eng().framesWon(match);
+  const card = (p) => {
+    const b = pool.playerBody(s, p);
+    return h(
+      "div",
+      { class: `player${!s.over && s.turn === p ? " at" : ""}`, "aria-label": `${n[p]}: ${b.big} ${b.sub}` },
+      h("div", { class: "p-name" }, h("span", { text: n[p] }), mode === "online" && online.seat === p ? h("span", { class: "p-you", text: "YOU" }) : null),
+      h("div", { class: "p-score pool-score", text: b.big }),
+      h("div", { class: "p-sub" }, b.sub),
+      b.dots
+    );
+  };
+  $("#players").replaceChildren(card(0), h("div", { class: "frames" }, h("b", { text: `${won[0]}–${won[1]}` }), h("small", { text: "GAMES WON" })), card(1));
+  $("#standing").replaceChildren(...[].concat(pool.standing(s, n)));
+  const cards = [];
+  const alerts = [];
+  pool.guide(s, n, cards, alerts);
+  $("#guide").replaceChildren(...cards);
+  $("#alerts").replaceChildren(...alerts);
+  markNew();
+  const padEl = $("#pad");
+  padEl.classList.add("pool-pad");
+  padEl.classList.toggle("locked", !can("turn", s));
+  padEl.replaceChildren(...pool.pad(s));
+  const turn = can("turn", s);
+  $("#btn-miss").disabled = !turn;
+  $("#btn-foul").disabled = !turn;
+  $("#btn-miss").replaceChildren(h("b", { text: s.breakShot ? "Log the break" : "Missed" }), h("small", { text: s.breakShot ? "after the balls stop" : "no foul, nothing in" }));
+  $("#btn-undo").disabled = !can("undo", s);
+  const last = eventsNow()[eventsNow().length - 1];
+  $("#undo-sub").textContent = !last ? (match.frames.length > 1 ? "new game" : "last tap") : last.t === "choose" ? "the choice" : last.t === "concede" ? "give up" : "last shot";
+  const rows = pool.logRows(s, n).filter(Boolean);
+  $("#log").replaceChildren(...(rows.length ? rows : [h("li", { class: "info empty", text: "Nothing potted yet. Tap a ball when it drops." })]));
+  // racking and putting the 8 back: pop-ups that only close once done
+  const gate = pool.gates(s, ui);
+  const allowed = gate && (mode === "local" || (gate.kind === "setup" ? online.seat !== null : can("turn", s) || (s.spot8 && online.seat === s.turn)));
+  if (allowed) {
+    if (ui.sheetKind !== gate.kind || ui.gateKey !== gate.key) {
+      ui.gateKey = gate.key;
+      gate.open();
+    }
+  } else if (ui.sheetKind === "spot" || ui.sheetKind === "setup") closeSheet();
+}
+
+/** Only cards that just appeared slide in; the rest stay still while you tap. */
+function markNew() {
+  const keys = new Set();
+  for (const c of document.querySelectorAll("#guide .g-card, #alerts .g-card")) {
+    const k = c.dataset.key;
+    if (!k) continue;
+    keys.add(k);
+    if (!ui.seen.has(k)) c.classList.add("new");
+  }
+  ui.seen = keys;
 }
 
 /**
@@ -652,12 +757,14 @@ const LESSONS = [
 ];
 
 function learnSheet(i = 0) {
-  const [title, body] = LESSONS[i];
-  const last = i === LESSONS.length - 1;
+  const poolGame = match ? isPool() : ui.game === "pool";
+  const lessons = poolGame ? pool.LESSONS : LESSONS;
+  const [title, body] = lessons[i];
+  const last = i === lessons.length - 1;
   openSheet(
-    "How snooker works",
+    poolGame ? "How 8-ball pool works" : "How snooker works",
     h("div", { class: "lesson" }, h("h3", { text: `${i + 1}. ${title}` }), ...body()),
-    h("div", { class: "lesson-dots", "aria-hidden": "true" }, LESSONS.map((_, j) => h("i", { class: j === i ? "now" : "" }))),
+    h("div", { class: "lesson-dots", "aria-hidden": "true" }, lessons.map((_, j) => h("i", { class: j === i ? "now" : "" }))),
     h(
       "div",
       { class: "row" },
@@ -673,8 +780,9 @@ function learnSheet(i = 0) {
 
 /** One quick answer on its own, e.g. "what's a frame?" from the header. */
 function answerSheet(id) {
-  const e = byId(id);
-  openSheet(e.q, h("div", { class: "qa-solo" }, rich(e.a(context(match ? state() : null, names())))));
+  const book = rulebook();
+  const e = book.byId(id);
+  openSheet(e.q, h("div", { class: "qa-solo" }, rich(e.a(book.context(match ? state() : null, names())))));
 }
 
 function setTheme(light) {
@@ -690,7 +798,7 @@ function setTheme(light) {
 function renderTag(s = state()) {
   if (!match) return;
   const tag = $("#frame-tag");
-  tag.replaceChildren(h("button", { type: "button", class: "frame-help", on: { click: () => answerSheet("what-frame") } }, "Game ", h("b", { text: String(frameNo()) })), ` · ${match.reds} reds`);
+  tag.replaceChildren(h("button", { type: "button", class: "frame-help", on: { click: () => answerSheet(isPool() ? "p-how" : "what-frame") } }, "Game ", h("b", { text: String(frameNo()) })), isPool() ? " · 8-ball" : ` · ${match.reds} reds`);
   if (mode === "online") {
     tag.append(" · ", h("span", { class: "live", text: online.down ? "reconnecting…" : online.seat === null ? "watching live" : "live" }));
   }
@@ -699,6 +807,7 @@ function renderTag(s = state()) {
 function renderPlayers(s) {
   const n = names();
   const won = framesWon(match);
+  $("#pad").classList.remove("pool-pad");
   const card = (p) =>
     h(
       "div",
@@ -976,6 +1085,7 @@ function padHint(s) {
 
 function renderActions(s) {
   const turn = can("turn", s);
+  $("#btn-miss").replaceChildren(h("b", { text: "Missed" }), h("small", { text: "nothing went in" }));
   $("#btn-miss").disabled = !turn;
   $("#btn-foul").disabled = !turn;
   $("#btn-undo").disabled = !can("undo", s);
@@ -1307,9 +1417,11 @@ function menuSheet() {
     );
   }
   items.push(
-    btn("Where the balls go at the start", () => openSheet("Setting up the table", h("div", { class: "table-wrap", html: setupSVG(match.reds) }), h("p", { class: "lead-text", text: "From the end with the D: green left, brown middle, yellow right. Blue in the middle of the table, pink halfway to the far end with the reds packed behind it, black near the far cushion. White anywhere in the D." })))
+    isPool()
+      ? btn("How to rack the balls", () => openSheet("Racking the balls", h("div", { class: "table-wrap", html: poolSVG({ rack: true }) }), h("p", { class: "lead-text", text: "Triangle's tip on the foot spot at the far end. The 8 in the middle of the third row, a solid and a stripe in the back corners, the rest in any order. White anywhere behind the line at your end." })))
+      : btn("Where the balls go at the start", () => openSheet("Setting up the table", h("div", { class: "table-wrap", html: setupSVG(match.reds) }), h("p", { class: "lead-text", text: "From the end with the D: green left, brown middle, yellow right. Blue in the middle of the table, pink halfway to the far end with the reds packed behind it, black near the far cushion. White anywhere in the D." })))
   );
-  items.push(btn("How snooker works (1 minute)", () => learnSheet(0)));
+  items.push(btn(isPool() ? "How pool works (1 minute)" : "How snooker works (1 minute)", () => learnSheet(0)));
   items.push(btn("Rules & quick answers", () => askSheet()));
   const light = document.documentElement.dataset.theme === "light";
   items.push(btn(light ? "Switch to dark theme" : "Switch to light theme", () => {
@@ -1362,8 +1474,9 @@ function confirmSheet(title, text, yes, onYes) {
 
 function askSheet(q = "") {
   const s = match ? state() : null;
+  const { context, search, suggestions, byId, QA, TOPICS } = rulebook();
   const c = context(s, names());
-  const input = h("input", { class: "ask-input", type: "search", placeholder: "e.g. what if I pot the white?", "aria-label": "Ask a rules question", enterkeyhint: "search", value: q });
+  const input = h("input", { class: "ask-input", type: "search", placeholder: rulebook() === POOLQ ? "e.g. what if I scratch on the 8?" : "e.g. what if I pot the white?", "aria-label": "Ask a rules question", enterkeyhint: "search", value: q });
   const out = h("div", { style: "display:flex;flex-direction:column;gap:8px" });
   const qa = (e, open = false) => {
     let answer;
@@ -1375,6 +1488,7 @@ function askSheet(q = "") {
     const ans = h("div", { class: "ans" }, rich(answer));
     if (e.show === "table") ans.append(h("div", { class: "table-wrap", html: tableSVG({ rack: match ? match.reds : 15 }) }));
     if (e.show === "d") ans.append(h("div", { class: "table-wrap", html: tableSVG({ d: true }) }));
+    if (["rack", "kitchen", "anywhere", "spot"].includes(e.show)) ans.append(h("div", { class: "table-wrap", html: poolSVG({ [e.show]: true }) }));
     const d = h("details", { class: "qa" }, h("summary", { text: e.q }), ans);
     d.open = open;
     return d;
@@ -1394,7 +1508,7 @@ function askSheet(q = "") {
     out.replaceChildren(
       ...(hits.length
         ? hits.map((e, i) => qa(e, i === 0))
-        : [h("p", { class: "note", text: "No match. Try words like white, foul, call, free ball, spot, order or miss." })]),
+        : [h("p", { class: "note", text: rulebook() === POOLQ ? "No match. Try words like scratch, foul, break, 8, open table, call or ball in hand." : "No match. Try words like white, foul, call, free ball, spot, order or miss." })]),
       h("p", { class: "topic", text: "Or browse" }),
       ...suggestions(s).map(byId).filter((e) => e && !hits.includes(e)).map((e) => qa(e))
     );
@@ -1418,7 +1532,7 @@ function installSheet() {
   if (way === "prompt")
     how = btn(onHome ? "Add to home screen" : "Install", async () => {
       closeSheet();
-      if (await promptInstall()) toast(onHome ? "Snooker is on your home screen" : "Snooker is installed");
+      if (await promptInstall()) toast(onHome ? "Chalk is on your home screen" : "Chalk is installed");
     }, "btn primary big");
   else if ((way === "ios" || way === "mac") && appleGuide) how = appleSteps(appleGuide);
   else if (way === "ios") how = steps(["Open your browser's ", b("Share"), " menu ", h("span", { html: SHARE_ICON }), "."], ["Choose ", b("Add to Home Screen"), "."]);
@@ -1497,6 +1611,19 @@ async function wake(on) {
 /* Wiring                                                              */
 /* ------------------------------------------------------------------ */
 
+$(".pool-art").replaceChildren(...[1, 11, 8, 6, 13].map((n) => pool.pdot(n, "pdot big")));
+for (const b of document.querySelectorAll("#view-pick [data-game]"))
+  b.addEventListener("click", () => {
+    pickGame(b.dataset.game);
+    renderHome();
+    show("home");
+  });
+$("#game-pick").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-game]");
+  if (!b) return;
+  pickGame(b.dataset.game);
+  renderHome();
+});
 $("#reds-pick").addEventListener("click", (e) => {
   const b = e.target.closest("[data-reds]");
   if (!b) return;
@@ -1513,8 +1640,17 @@ $("#local-form").addEventListener("input", syncBreakPick);
 $("#local-form").addEventListener("submit", startLocal);
 $("#start-local").addEventListener("click", openLocalSetup);
 $("#start-online").addEventListener("click", startOnline);
-$("#btn-miss").addEventListener("click", () => can("turn") && dispatch({ t: "miss" }));
-$("#btn-foul").addEventListener("click", () => can("turn") && shotSheet());
+$("#btn-miss").addEventListener("click", () => {
+  if (!can("turn")) return;
+  if (isPool()) return pool.missed();
+  dispatch({ t: "miss" });
+});
+$("#btn-foul").addEventListener("click", () => {
+  if (!can("turn")) return;
+  if (!isPool()) return shotSheet();
+  if (state().breakShot) pool.breakSheet();
+  else pool.shotSheet();
+});
 $("#btn-undo").addEventListener("click", () => dispatch({ t: "undo" }));
 document.addEventListener("click", (e) => {
   const go = e.target.closest("[data-go]");
@@ -1529,10 +1665,19 @@ document.addEventListener("click", (e) => {
 
 function boot() {
   syncInstall();
+  try {
+    const g = localStorage.getItem(GAME);
+    ui.game = g === "pool" || g === "snooker" ? g : null;
+  } catch {}
   const id = new URLSearchParams(location.search).get("g");
   if (id && /^[a-z2-9]{10}$/.test(id)) return openOnline(id);
   stopPolling();
   mode = null;
+  if (!ui.game) {
+    // first start: snooker or pool? (old snooker users already have a saved game: keep them on it)
+    if (loadLocal("snooker") || Object.keys(seats()).length) pickGame("snooker");
+    else return show("pick");
+  }
   renderHome();
   show("home");
 }

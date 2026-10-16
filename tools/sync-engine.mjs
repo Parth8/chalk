@@ -1,18 +1,25 @@
-// Copies the rules engine (js/engine.js) into worker/worker.js, so the Worker checks every move
-// with exactly the rules the page uses and still deploys as a single file you can paste.
+// Copies the rules engines (js/engine.js for snooker, js/pool.js for 8-ball) into worker/worker.js,
+// so the Worker checks every move with exactly the rules the page uses and still deploys as a
+// single file you can paste. Each engine sits in its own namespace (SNOOKER, POOL).
 //   npm run worker
-// tests/worker.test.mjs fails if the copy ever drifts from js/engine.js.
+// tests/worker.test.mjs fails if the copy ever drifts from the engines.
 
 import { readFileSync, writeFileSync } from "node:fs";
 
 const ROOT = new URL("../", import.meta.url);
-const START = "// ---- engine: copied from js/engine.js by `npm run worker`. Don't edit it here. ----";
-const END = "// ---- end engine ----";
+const START = "// ---- engines: copied from js/engine.js and js/pool.js by `npm run worker`. Don't edit them here. ----";
+const END = "// ---- end engines ----";
 
-/** The engine as it should appear inside the Worker: same code, nothing exported. */
+function namespaced(name, file) {
+  const src = readFileSync(new URL(file, ROOT), "utf8").trim();
+  const names = [...src.matchAll(/^export (?:async )?(?:function|const|let) (\w+)/gm)].map((m) => m[1]);
+  const body = src.replace(/^export /gm, "").replace(/^/gm, "  ").replace(/^ +$/gm, "");
+  return `const ${name} = (() => {\n${body}\n  return { ${names.join(", ")} };\n})();`;
+}
+
+/** The engines as they should appear inside the Worker. */
 export function engineBlock() {
-  const src = readFileSync(new URL("js/engine.js", ROOT), "utf8").replace(/^export /gm, "").trim();
-  return `${START}\n${src}\n${END}`;
+  return `${START}\n${namespaced("SNOOKER", "js/engine.js")}\n\n${namespaced("POOL", "js/pool.js")}\n${END}`;
 }
 
 export function workerWithEngine(worker) {
@@ -25,5 +32,5 @@ export function workerWithEngine(worker) {
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
   const file = new URL("worker/worker.js", ROOT);
   writeFileSync(file, workerWithEngine(readFileSync(file, "utf8")));
-  console.log("worker/worker.js: engine updated");
+  console.log("worker/worker.js: engines updated");
 }
