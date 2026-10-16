@@ -1,0 +1,13 @@
+{
+  "name": "snooker",
+  "private": true,
+  "type": "module",
+  "description": "Snooker scorer: tap the ball you potted. Rules guide, re-spot helper and shared live games. No build step: plain HTML, CSS and ES modules.",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "e2e": "node tests/app.e2e.mjs",
+    "serve": "python3 -m http.server 8765",
+    "worker": "node tools/sync-engine.mjs",
+    "icons": "node tools/build-icons.mjs"
+  }
+}

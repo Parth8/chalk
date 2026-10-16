@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+  <!-- Your Worker address, for shared games. Edit here AND in connect-src below if it changes. -->
+  <meta name="api-base" content="https://snooker-api.8parthaggarwal1999.workers.dev">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://snooker-api.8parthaggarwal1999.workers.dev; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="referrer" content="no-referrer">
+
+  <title>Snooker scorer</title>
+  <meta name="description" content="Tap the ball you potted. Scores, breaks, fouls, where to re-spot each colour and quick rule answers. Share a link and both phones stay in step.">
+  <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101412" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+
+  <!-- Add to home screen: opens full-screen, like an app -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-title" content="Snooker">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <main id="app">
+    <!-- ============ Home ============ -->
+    <section id="view-home" class="view" hidden>
+      <header class="home-head">
+        <span class="logo" aria-hidden="true"></span>
+        <h1>Snooker</h1>
+        <p class="lede">Tap the ball you pot. We keep the score, the order and the rules.</p>
+      </header>
+
+      <div class="card resume" id="resume" hidden></div>
+
+      <div class="card">
+        <p class="label" id="reds-label">Reds on the table</p>
+        <div class="seg" role="radiogroup" aria-labelledby="reds-label" id="reds-pick">
+          <button type="button" role="radio" data-reds="15" aria-checked="true">15</button>
+          <button type="button" role="radio" data-reds="10" aria-checked="false">10</button>
+          <button type="button" role="radio" data-reds="6" aria-checked="false">6</button>
+        </div>
+        <button type="button" class="btn primary big" id="start-online">
+          <span>Start a shared game</span>
+          <small>Get a link · each side scores on their own phone</small>
+        </button>
+        <button type="button" class="btn big" id="start-local">
+          <span>Score on this phone</span>
+          <small>One phone for both players · works offline</small>
+        </button>
+        <p class="note" id="online-note" hidden></p>
+      </div>
+
+      <footer class="foot">
+        <button type="button" class="link" data-open="ask">Rules &amp; quick answers</button>
+        <button type="button" class="link install-link" data-open="install" hidden>Add to home screen</button>
+      </footer>
+    </section>
+
+    <!-- ============ Names (this phone) ============ -->
+    <section id="view-local" class="view" hidden>
+      <header class="bar">
+        <button type="button" class="icon-btn" data-go="home" aria-label="Back">←</button>
+        <h1>Who's playing?</h1>
+        <span></span>
+      </header>
+      <form class="card" id="local-form" autocomplete="off">
+        <label class="field"><span>Player or team 1</span><input name="p0" maxlength="24" placeholder="Player 1" enterkeyhint="next"></label>
+        <label class="field"><span>Player or team 2</span><input name="p1" maxlength="24" placeholder="Player 2" enterkeyhint="done"></label>
+        <p class="label" id="breaks-label">Who breaks?</p>
+        <div class="seg" role="radiogroup" aria-labelledby="breaks-label" id="break-pick">
+          <button type="button" role="radio" data-b="0" aria-checked="true">Player 1</button>
+          <button type="button" role="radio" data-b="toss" aria-checked="false">Toss</button>
+          <button type="button" role="radio" data-b="1" aria-checked="false">Player 2</button>
+        </div>
+        <button type="submit" class="btn primary big"><span>Start</span></button>
+      </form>
+    </section>
+
+    <!-- ============ Join a shared game ============ -->
+    <section id="view-join" class="view" hidden>
+      <header class="bar">
+        <button type="button" class="icon-btn" data-go="home" aria-label="Home">←</button>
+        <h1>Shared game</h1>
+        <span></span>
+      </header>
+      <div class="card" id="join-card"></div>
+    </section>
+
+    <!-- ============ Game ============ -->
+    <section id="view-game" class="view" hidden>
+      <header class="bar">
+        <button type="button" class="icon-btn" data-open="menu" aria-label="Menu" aria-haspopup="dialog">⋯</button>
+        <p class="frame-tag" id="frame-tag"></p>
+        <button type="button" class="icon-btn ask-btn" data-open="ask" aria-label="Ask a rules question" aria-haspopup="dialog">?</button>
+      </header>
+
+      <div class="players" id="players"></div>
+      <p class="standing" id="standing" aria-live="polite"></p>
+
+      <div class="guide" id="guide" aria-live="polite"></div>
+
+      <div class="pad" id="pad" role="group" aria-label="Tap the ball that was potted"></div>
+
+      <div class="actions" id="actions">
+        <button type="button" class="btn" id="btn-miss"><b>Missed</b><small>end turn</small></button>
+        <button type="button" class="btn warn" id="btn-foul"><b>Foul</b><small>gives points</small></button>
+        <button type="button" class="btn" id="btn-undo"><b>Undo</b><small id="undo-sub">last tap</small></button>
+      </div>
+
+      <div class="guide" id="alerts" aria-live="polite"></div>
+
+      <section class="potted" aria-labelledby="potted-title">
+        <h2 id="potted-title">Potted</h2>
+        <ol id="log" class="log"></ol>
+      </section>
+    </section>
+  </main>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" hidden>
+    <div class="sheet-grip" aria-hidden="true"></div>
+    <div class="sheet-body" id="sheet-body"></div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

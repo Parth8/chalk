@@ -1,0 +1,19 @@
+{
+  "name": "Snooker scorer",
+  "short_name": "Snooker",
+  "description": "Tap the ball you potted. Scores, breaks, fouls, where to re-spot each colour and quick rule answers. Share a link and both phones stay in step.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f5f1",
+  "theme_color": "#f6f5f1",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "categories": ["sports", "games", "utilities"],
+  "lang": "en"
+}
