@@ -36,7 +36,7 @@ export const QA = [
     a: (c) =>
       `Foul. **${c.opp}** gets ${pen(c)}. Nothing you potted on that shot counts. ${spotsBack}\n` +
       `${c.opp} then puts the white **anywhere in the D** and plays, or makes ${c.me} play again from the D.\n` +
-      `In the app: tap **Foul → Potted the white**.`,
+      `In the app: tap **What happened?** and pick **White** under "What went in?".`,
   },
   {
     id: "red-and-white",
@@ -45,7 +45,7 @@ export const QA = [
     keys: "red white cue in-off both together same shot scratch pot",
     a: (c) =>
       `Foul: the red doesn't count and **stays down** (reds never come back). **${c.opp}** gets ${pen(c)} and plays with the white in hand in the D.\n` +
-      `In the app: **Foul → Potted the white**, and add the red under "Also potted" so the red count stays right.`,
+      `In the app: **What happened?** → white hit **Red** first → **White** and **Red** went in.`,
   },
   {
     id: "ball-in-hand",
@@ -81,7 +81,7 @@ export const QA = [
     show: "d",
     a: (c) =>
       `No. Only **inside the D or on its lines**, not the rest of the baulk area. Playing from outside the D is a foul: ${pen(c)} to ${c.opp}.\n` +
-      `In the app: **Foul → Played from outside the D**.`,
+      `In the app: **What happened?** → **Anything else?** → **Played from outside the D**.`,
   },
   {
     id: "move-in-hand",
@@ -184,7 +184,7 @@ export const QA = [
     a: (c) =>
       `If the white **hit that colour first**: no foul and no points. Your turn ends and ${c.opp} comes in on ${c.reds > 0 ? "a red" : "the yellow"}. It is **not** ball in hand.\n` +
       `If the white hit a different ball first, or nothing at all, it's a foul: **${c.opp}** gets the value of the colour you called (at least 4).\n` +
-      `In the app: tap **Missed** (or **Foul** if it hit the wrong ball).`,
+      `In the app: tap **Missed**. If it hit a different ball first, tap **What happened?** and the app works it out.`,
   },
   {
     id: "missed-pot",
@@ -209,7 +209,7 @@ export const QA = [
     keys: "foul and a miss replace put back referee attempt",
     a: (c) =>
       `If you fail to hit the ball on and didn't make a proper attempt, the referee calls a **miss**. ${c.opp} gets the penalty and can have **the balls put back** and make you play the shot again.\n` +
-      `Friendly games usually skip it. In the app, after a foul tap **Miss: put back**.`,
+      `Friendly games usually skip it. In the app, after a foul tap **Put balls back (miss)**.`,
   },
   {
     id: "three-miss",
@@ -235,7 +235,7 @@ export const QA = [
     keys: "call nominate declare colour must have to say",
     a: () =>
       `After potting a red, yes, if it isn't obvious which colour you're playing. The colour you call is the one the white must hit first. A foul before you've called counts as **7**.\n` +
-      `In the app, just tap the colour you potted.`,
+      `In the app: tap the colour once to **call** it, and again when it goes in.`,
   },
   {
     id: "pot-via-red",
@@ -272,7 +272,7 @@ export const QA = [
     topic: "Calling a colour",
     q: "What if I pot two reds in one shot?",
     keys: "two 2 reds both same shot double one stroke",
-    a: () => `Both count: **1 point each**. You still get just one colour after. In the app, tap the red twice and confirm "same shot".`,
+    a: () => `Both count: **1 point each**. You still get just one colour after. In the app, tap the red, then tap **Another red in, same shot**.`,
   },
   {
     id: "red-and-colour",
@@ -411,7 +411,7 @@ export const QA = [
     topic: "Fouls",
     q: "Can I make my opponent play again after their foul?",
     keys: "make play again opponent foul put back retake",
-    a: () => `Yes, you can always ask them to play again from where the balls are (from the D if the white went in). You still keep the penalty points. In the app, tap **Play again** after the foul.`,
+    a: () => `Yes, you can always ask them to play again from where the balls are (from the D if the white went in). You still keep the penalty points. In the app, tap the **plays again** button on the foul card.`,
   },
   {
     id: "touch-ball",
@@ -502,7 +502,7 @@ export const QA = [
     a: (c) =>
       `If a foul leaves you **snookered**, you may pick **any colour** to play as if it were the ball on.\n` +
       `It scores the value of the ball on (${c.phase === "clear" ? `**${c.onVal}** for the ${c.next} right now` : "**1** while reds are on, then you take a colour"}), and the colour goes back on its spot.\n` +
-      `In the app: after a foul tap **Free ball**, then tap the colour you potted.`,
+      `In the app: after a foul tap **Free ball (I'm snookered)**, then tap the colour you potted.`,
   },
   {
     id: "free-behind",
@@ -565,7 +565,7 @@ export const QA = [
     topic: "End of frame",
     q: "When can I concede the frame?",
     keys: "concede give up resign forfeit",
-    a: () => `Any time it's your turn. It's considered good manners to only concede once you need snookers. In the app: **⋯ → Concede frame**.`,
+    a: () => `Any time it's your turn. It's considered good manners to only concede once you need snookers. In the app: **⋯ → Concede this frame**.`,
   },
   {
     id: "max",
@@ -618,6 +618,23 @@ export const QA = [
     q: "What if neither of us can make progress?",
     keys: "stalemate stuck restart re-rack",
     a: () => `If you both agree it's a stalemate, re-rack and restart the frame (same player breaks).`,
+  },
+  {
+    id: "reset",
+    topic: "Basics",
+    q: "How do I restart a frame, reset the scores or delete the game?",
+    keys: "reset restart delete clear start over new game wipe scores remove",
+    a: () =>
+      `Tap **⋯** at the top left. On one phone: **Restart this frame**, **Reset the whole game** or **Delete this game**.\n` +
+      `In a shared game, restarting wipes the other side's score too, so they get a request on their phone and have to **Agree**.`,
+  },
+  {
+    id: "how-tap",
+    topic: "Basics",
+    q: "How do I score in the app?",
+    keys: "how use app score tap call colour potted points add",
+    a: () =>
+      `• **Red went in:** tap Red.\n• **On a colour:** tap it once to **call** it, tap it again when it goes in.\n• **Clearing the colours:** tap the ball on when it goes in.\n• **Nothing went in:** tap **Missed**.\n• **Anything odd** (wrong ball hit first, white went in, not sure if it's a foul): tap **What happened?** and answer two questions. The app tells you if it's a foul and who gets the points.`,
   },
   {
     id: "undo",

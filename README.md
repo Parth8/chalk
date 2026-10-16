@@ -12,9 +12,14 @@ No ads, no sign-ups, no build step.
 
 ## What it does
 
-- **Tap to score.** Big, real-coloured balls. The ones you can legally pot right now are ringed; the rest are dimmed but still tappable, and tapping one explains why it's a foul and what it costs.
-- **Guides the order without guessing your shot.** It says "Pot any red", then "Now any colour" (every colour lit, because it's your choice), then "Yellow (2)" and the rest in order once the reds are gone. It never tells you which colour to go for.
-- **Fouls in two taps.** Pick what happened (potted the white, hit nothing, hit the wrong ball first, potted a ball that wasn't on, ball off the table, touched/push/jump, 7-pointers). Add anything that went in. The penalty is worked out from the ball on and the balls involved (4 to 7) and goes to the other side. Reds potted on a foul stay down; colours go back.
+- **Tap to score, the way you play:**
+  - **Red went in:** tap Red.
+  - **On a colour:** tap it once to **call** it (it's ringed and marked CALLED; tap another to change your mind), and tap it again when it goes in.
+  - **Clearing the colours:** tap the ball on when it goes in.
+  - **Nothing went in:** tap **Missed**. Your turn ends, no points.
+  A line under the balls always says what to tap next.
+- **Guides the order without guessing your shot.** "Pot any red", then "Call a colour" (every colour available, because it's your choice), then "Yellow (2)" and the rest in order once the reds are gone. It never tells you which colour to go for.
+- **Not sure if it's a foul? Tap What happened?** Answer two questions: what did the white hit first, and what went in. The app rules on it: a fair pot, a miss (no foul), or a foul, with the reason in plain words ("You were on a red, but the white hit the blue first"), the points (4 to 7) and who gets them. Touched a ball, push, jump and the 7-pointers are under "Anything else?". Reds potted on a foul stay down; colours go back.
 - **After a foul**, the player coming in chooses: play on, make the offender play again, take a **free ball** if snookered, or **foul and a miss** (balls put back, penalty kept).
 - **Put it back here.** When a colour has to be re-spotted, a small top-down table shows its spot. If the spot is covered, tap **Spot covered?** to step through the next free spot by the rules (black, pink, blue, brown, green, yellow), and finally the "as close as you can, towards the top cushion" fallback.
 - **White in hand** after an in-off or the white leaving the table: the D is drawn right next to what's on, and the foul sheet offers "played from outside the D". **Re-spotted black** when the scores are level after the last black, with the coin toss.
@@ -23,6 +28,7 @@ No ads, no sign-ups, no build step.
 - **15, 10 or 6 reds**, for full-size and smaller tables.
 - **Quick answers.** Over 70 questions players actually ask, worded for your game (names and real points). Type in plain words ("what if I pot the cue ball", "can I pot my colour off a red", "scratch", "spot is taken") or browse. The top of the list changes with the situation: on a colour you see calling questions, after a foul you see free ball and play-again questions.
 - **Undo** any tap, one step at a time.
+- **Restart, reset or delete** from the **⋯** menu: restart this frame, reset the whole game, or delete it. Home also has a ✕ to delete a saved game. In a shared game, restarting wipes both scores, so the other side gets a request and has to agree.
 - **Shared games** (below) or **one phone** for both players. One-phone games are saved on the phone and work offline.
 - **Add to home screen.** Opens full-screen like an app, keeps the screen awake while you play, and works offline after the first visit. The same add-to-home-screen guide as Track and Shelfie, with picture steps on iPhone, iPad and Mac.
 
@@ -38,7 +44,7 @@ Based on the WPBSA Official Rules of Snooker. The rules engine is `js/engine.js`
 2. Type your name (or a team name). Send the link to the other side.
 3. They open it and type theirs. A coin toss picks who breaks, and both phones show the same game.
 
-**Each side can only score its own turns.** The side at the table logs its pots, misses and fouls. After a foul, only the side coming in can choose play on, play again, free ball or put back. You can only undo your own last move, and only concede for yourself. So one side can never add to or take from the other's score. Both phones, and anyone else with the link, see every move live, so everything is in the open.
+**Each side can only score its own turns.** The side at the table logs its calls, pots, misses and fouls (the other phone sees the call live). After a foul, only the side coming in can choose play on, play again, free ball or put back. You can only undo your own last move, and only concede for yourself. Restarting a frame or the whole game needs both sides: one asks, the other agrees. So one side can never add to or take from the other's score. Both phones, and anyone else with the link, see every move live, so everything is in the open.
 
 How it's enforced: joining gives each side a private seat key, kept only on that phone (the Worker stores a SHA-256 hash of it). Every move is sent with that key and checked by the Worker, which replays the game with **the same rules engine as the page** before accepting it. Moves made on an out-of-date view are refused, so two phones can't overwrite each other. Names are cleaned, moves are checked field by field, requests are rate-limited, and only this site's origin may call the API. Games untouched for 30 days are deleted. There are no accounts and nothing else is stored.
 
@@ -74,7 +80,7 @@ Optionally add a Rate Limiting binding named `LIMITER`.
 | `POST /api/games/<id>/join` | `{ name }` | `{ seat, token, v, game }` |
 | `POST /api/games/<id>/act` | `{ token, v, e }` | `{ v, game }` |
 
-`game` is `{ id, reds, players: [name, name], frames: [{ breaker, events }] }`. A move `e` is one of `pot {ball, extra?}`, `miss`, `foul {kind, hit?, reds?, colours?, white?, called?}`, `again`, `replace`, `free`, `toss {who}`, `concede`, `undo`, `next`. Errors are `{ error, message }`: `not_your_turn` and `not_yours` (403), `stale` (409, with the current game), `illegal` (409), `no_seat` (401), `full` (409), `rate_limited` (429).
+`game` is `{ id, reds, players: [name, name], frames: [{ breaker, events }] }`. A move `e` is one of `call {ball}`, `pot {ball, extra?}`, `miss`, `foul {kind, hit?, reds?, colours?, white?, called?}`, `again`, `replace`, `free`, `toss {who}`, `concede`, `undo`, `next`, `restart {all?}` (ask, or agree when the other side asked), `restart-no`. A pending restart request shows as `ask: { by, all }` on the current frame. Errors are `{ error, message }`: `not_your_turn` and `not_yours` (403), `stale` (409, with the current game), `illegal` (409), `no_seat` (401), `full` (409), `rate_limited` (429).
 
 Phones check for changes every 2.5 seconds while the app is on screen, and straight away when it comes back.
 

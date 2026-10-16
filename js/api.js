@@ -59,6 +59,13 @@ export function seatFor(id) {
   const s = seats()[id];
   return s && (s.seat === 0 || s.seat === 1) && typeof s.token === "string" ? s : null;
 }
+export function forgetSeat(id) {
+  const all = seats();
+  delete all[id];
+  try {
+    localStorage.setItem(SEATS, JSON.stringify(all));
+  } catch {}
+}
 export function keepSeat(id, seat, token, names) {
   const all = seats();
   all[id] = { seat, token, names, at: Date.now() };

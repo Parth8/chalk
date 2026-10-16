@@ -227,3 +227,83 @@ test("break and highest break", () => {
   assert.equal(s.brk, 8);
   assert.equal(s.log.filter((l) => l.t === "pot").length, 6);
 });
+
+test("calling a colour: tap once to call, the call can change, only the called colour scores", () => {
+  let s = apply(fresh(), pot("red"));
+  assert.throws(() => apply(fresh(), { t: "call", ball: "blue" }), "nothing to call while on a red");
+  s = apply(s, { t: "call", ball: "blue" });
+  assert.equal(s.called, "blue");
+  assert.equal(judgePot(s, "pink").ok, false, "a different colour is a foul once one is called");
+  s = apply(s, { t: "call", ball: "pink" });
+  assert.equal(judgePot(s, "pink").ok, true);
+  assert.equal(judgePot(s, "red").ok, false, "after calling, another red isn't the same shot");
+  assert.equal(penalty(s, { kind: "nothing" }).pen, 6, "the call sets the penalty");
+  const t = apply(s, pot("pink"));
+  assert.equal(t.called, null);
+  assert.equal(t.scores[0], 7);
+  assert.equal(apply(s, { t: "miss" }).called, null);
+});
+
+test("judgeShot rules on a described shot", async () => {
+  const { judgeShot } = await import("../js/engine.js");
+  const red = fresh();
+  // hit a colour first while on a red: the user's own example
+  let r = judgeShot(red, { first: "blue" });
+  assert.equal(r.result, "foul");
+  assert.equal(r.pen, 5);
+  assert.match(r.reasons[0], /on a red, but the white hit the blue first/);
+  assert.deepEqual(r.events, [{ t: "foul", kind: "wrong-first", hit: "blue" }]);
+  // fair red, nothing in → miss, no foul
+  r = judgeShot(red, { first: "red" });
+  assert.equal(r.result, "miss");
+  // two reds in
+  r = judgeShot(red, { first: "red", reds: 2 });
+  assert.equal(r.result, "pot");
+  assert.equal(r.pts, 2);
+  assert.equal(r.events.reduce(apply, red).scores[0], 2);
+  // red in, white in
+  r = judgeShot(red, { first: "red", reds: 1, white: true });
+  assert.equal(r.result, "foul");
+  assert.equal(r.pen, 4);
+  assert.equal(r.events.reduce(apply, red).reds, 14);
+  assert.equal(r.events.reduce(apply, red).inHand, true);
+  // touched a ball while otherwise fine
+  r = judgeShot(red, { first: "red", other: "touch" });
+  assert.equal(r.result, "foul");
+  assert.equal(r.pen, 4);
+
+  const colour = apply(red, pot("red"));
+  // no call yet: hit the blue, blue went in → fair, call + pot
+  r = judgeShot(colour, { first: "blue", colours: ["blue"] });
+  assert.equal(r.result, "pot");
+  assert.deepEqual(r.events, [{ t: "call", ball: "blue" }, { t: "pot", ball: "blue" }]);
+  assert.equal(r.events.reduce(apply, colour).scores[0], 6);
+  // called the blue, the pink went in
+  const called = apply(colour, { t: "call", ball: "blue" });
+  r = judgeShot(called, { first: "blue", colours: ["pink"] });
+  assert.equal(r.result, "foul");
+  assert.equal(r.pen, 6);
+  // called the blue, hit a red first and the blue went in
+  r = judgeShot(called, { first: "red", colours: ["blue"] });
+  assert.equal(r.result, "foul");
+  assert.equal(r.pen, 5);
+  // not called, hit a red: they meant the green → 4; said nothing → 7
+  assert.equal(judgeShot(colour, { first: "red", called: "green" }).pen, 4);
+  assert.equal(judgeShot(colour, { first: "red" }).pen, 7);
+
+  // clearance: on yellow, potted the green
+  const clear = [pot("red"), pot("black")].reduce(apply, fresh(1));
+  r = judgeShot(clear, { first: "yellow", colours: ["green"] });
+  assert.equal(r.result, "foul");
+  assert.equal(r.pen, 4);
+  r = judgeShot(clear, { first: "yellow", colours: ["yellow"] });
+  assert.equal(r.result, "pot");
+  assert.equal(r.pts, 2);
+
+  // free ball: any colour hit first counts as the red
+  const free = apply(apply(red, { t: "foul", kind: "nothing" }), { t: "free" });
+  r = judgeShot(free, { first: "pink", colours: ["pink"] });
+  assert.equal(r.result, "pot");
+  assert.equal(r.pts, 1);
+  assert.equal(r.events.reduce(apply, free).scores[1], 4 + 1);
+});

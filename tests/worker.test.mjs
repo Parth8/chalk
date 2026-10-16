@@ -148,3 +148,40 @@ test("clean names and moves", () => {
   const ids = new Set(Array.from({ length: 200 }, () => _test.randomId()));
   assert.equal(ids.size, 200);
 });
+
+test("calls come only from the side at the table, and set the penalty", async () => {
+  const env = setup();
+  const g = await game(env);
+  const at = g.breaker;
+  await g.act(at, { t: "pot", ball: "red" });
+  assert.equal((await g.act(1 - at, { t: "call", ball: "pink" })).status, 403);
+  assert.equal((await g.act(at, { t: "call", ball: "purple" })).status, 400);
+  assert.equal((await g.act(at, { t: "call", ball: "pink" })).status, 200);
+  assert.equal((await g.act(at, { t: "pot", ball: "blue" })).status, 409, "not the called colour");
+  const r = await g.act(at, { t: "pot", ball: "pink" });
+  assert.equal(r.status, 200);
+});
+
+test("restarting needs both sides: one asks, the other agrees or says no", async () => {
+  const env = setup();
+  const g = await game(env);
+  const at = g.breaker;
+  await g.act(at, { t: "pot", ball: "red" });
+  let r = await g.act(at, { t: "restart" });
+  assert.deepEqual(r.body.game.frames[0].ask, { by: at, all: false });
+  assert.equal(r.body.game.frames[0].events.length, 1, "asking alone changes nothing");
+  r = await g.act(at, { t: "restart" });
+  assert.equal(r.body.game.frames[0].events.length, 1, "asking twice doesn't count as agreeing");
+  r = await g.act(1 - at, { t: "restart-no" });
+  assert.equal(r.body.game.frames[0].ask, undefined);
+  await g.act(1 - at, { t: "restart" });
+  r = await g.act(at, { t: "restart" });
+  assert.deepEqual(r.body.game.frames[0], { breaker: at, events: [] }, "the other side agreed: frame wiped");
+  // whole game: two frames back to one
+  await g.act(at, { t: "concede" });
+  await g.act(at, { t: "next" });
+  await g.act(1 - at, { t: "restart", all: true });
+  r = await g.act(at, { t: "restart", all: true });
+  assert.deepEqual(r.body.game.frames, [{ breaker: at, events: [] }]);
+  assert.equal((await g.act(at, { t: "restart-no" })).status, 409, "nothing to cancel");
+});

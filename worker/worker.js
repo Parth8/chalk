@@ -10,6 +10,7 @@
  *   concede                   only for yourself
  *   undo                      only your own last move
  *   coin toss, next frame     either side
+ *   restart frame / game      one side asks, the other side agrees (it wipes both scores)
  * So one side can never add to, or take away from, the other's score, and both see everything.
  *
  * Routes (JSON):
@@ -216,7 +217,19 @@ async function act(env, id, body) {
   const match = { reds: g.reds, frames };
   const s = replayFrame(match);
 
-  if (e.t === "undo") {
+  if (e.t === "restart") {
+    // one side asks; the same move from the other side agrees and wipes the frame (or every frame)
+    if (frame.ask && frame.ask.by !== seat) {
+      if (frame.ask.all) frames.splice(0, frames.length, { breaker: frames[0].breaker, events: [] });
+      else {
+        frame.events = [];
+        delete frame.ask;
+      }
+    } else frame.ask = { by: seat, all: !!e.all };
+  } else if (e.t === "restart-no") {
+    if (!frame.ask) throw new ApiError(409, "nothing", "Nobody asked to restart.");
+    delete frame.ask;
+  } else if (e.t === "undo") {
     const last = frame.events[frame.events.length - 1];
     if (!last) throw new ApiError(409, "nothing", "Nothing to undo in this frame.");
     if (last.by !== seat) throw new ApiError(403, "not_yours", "You can only undo your own move.");
@@ -261,6 +274,11 @@ function cleanEvent(e) {
   };
   if (!e || typeof e !== "object") bad();
   switch (e.t) {
+    case "call":
+      if (!COLOURS.includes(e.ball)) bad();
+      return { t: "call", ball: e.ball };
+    case "restart":
+      return e.all === true ? { t: "restart", all: true } : { t: "restart" };
     case "pot":
       if (!BALLS.includes(e.ball)) bad();
       return e.extra === true ? { t: "pot", ball: e.ball, extra: true } : { t: "pot", ball: e.ball };
@@ -294,6 +312,7 @@ function cleanEvent(e) {
     case "replace":
     case "free":
     case "concede":
+    case "restart-no":
     case "undo":
     case "next":
       return { t: e.t };
@@ -395,6 +414,7 @@ function startFrame(reds, breaker) {
     foul: null, // the foul just committed, while the incoming player decides what to do: { by, pen, why, snap }
     toSpot: [], // colours that need putting back on their spots after the last event, highest first
     lastRed: false, // the last pot of this visit was a red, so another red tap can mean "two reds in one shot"
+    called: null, // the colour the player at the table has called (after a red)
     respot: false, // re-spotted black (scores were level after the final black)
     toss: false, // waiting for a coin toss to decide who plays the re-spotted black
     over: false,
@@ -413,7 +433,7 @@ function ballsOn(s) {
 }
 
 /** Value of "the ball on" for a foul: the red, the called colour (7 if none was called), or the next colour. */
-function valueOn(s, called) {
+function valueOn(s, called = s.called) {
   if (s.phase === "red") return 1;
   if (s.phase === "colour") return called ? VALUE[called] : 7;
   return VALUE[COLOURS[s.next]];
@@ -442,7 +462,7 @@ function judgePot(s, ball) {
     if (ball === "red") return { ok: true, pts: 1 };
     if (s.free) return { ok: true, pts: 1, free: true };
   } else if (s.phase === "colour") {
-    if (ball !== "red") return { ok: true, pts: VALUE[ball] };
+    if (ball !== "red" && (!s.called || ball === s.called)) return { ok: true, pts: VALUE[ball] };
     if (s.lastRed) return { ok: true, pts: 1, extra: true };
   } else {
     const on = COLOURS[s.next];
@@ -458,20 +478,18 @@ function judgePot(s, ball) {
  *   f = { kind, hit, reds, colours, called }
  */
 function penalty(s, f = {}) {
-  if (f.kind === "seven") return { pen: 7, why: "a 7-point foul" };
-  const parts = [{ v: 4, why: "the minimum" }];
-  const on = valueOn(s, f.called);
-  if (s.phase === "colour" && !f.called) parts.push({ v: 7, why: "no colour called, so it counts as 7" });
-  else if (s.phase === "red") parts.push({ v: 1, why: "the red" });
-  else {
-    const name = s.phase === "colour" ? f.called : COLOURS[s.next];
-    parts.push({ v: on, why: `the ${name}, the ball on` });
+  if (f.kind === "seven") return { pen: 7, why: "this foul is always worth 7" };
+  const called = f.called || s.called;
+  const parts = [{ v: 4, why: "4 is the minimum for any foul" }];
+  if (s.phase === "colour" && !called) parts.push({ v: 7, why: "no colour had been called, which makes it 7" });
+  else if (s.phase !== "red") {
+    const name = s.phase === "colour" ? called : COLOURS[s.next];
+    parts.push({ v: valueOn(s, called), why: `the ${name} you were on is worth ${VALUE[name]}` });
   }
-  if (f.hit && f.hit !== "white") parts.push({ v: VALUE[f.hit], why: `the ${f.hit} it involved` });
-  for (const c of f.colours || []) parts.push({ v: VALUE[c], why: `the ${c} potted` });
-  if (f.reds) parts.push({ v: 1, why: "the red potted" });
+  if (f.hit && f.hit !== "white") parts.push({ v: VALUE[f.hit], why: `the ${f.hit} it hit is worth ${VALUE[f.hit]}` });
+  for (const c of f.colours || []) parts.push({ v: VALUE[c], why: `the ${c} that went in is worth ${VALUE[c]}` });
   const top = parts.reduce((a, b) => (b.v > a.v ? b : a));
-  return { pen: Math.min(7, top.v), why: top.v === 4 ? "4 is the minimum" : `value of ${top.why}` };
+  return { pen: Math.min(7, top.v), why: top.why };
 }
 
 const byValue = (list) => [...new Set(list)].sort((a, b) => VALUE[b] - VALUE[a]);
@@ -499,6 +517,7 @@ const endVisit = (s) => {
   s.brk = 0;
   s.lastRed = false;
   s.free = false;
+  s.called = null;
 };
 
 /** Apply one event and return the new state. Throws on an event the rules don't allow here. */
@@ -530,6 +549,7 @@ function apply(prev, e) {
         s.next++;
         s.lastRed = false;
       }
+      s.called = null;
       s.scores[p] += j.pts;
       s.brk += j.pts;
       s.best[p] = Math.max(s.best[p], s.brk);
@@ -559,7 +579,7 @@ function apply(prev, e) {
       const { pen, why } = penalty(s, e);
       const by = s.turn;
       const opp = 1 - by;
-      const snap = { reds: s.reds, phase: s.phase, next: s.next, inHand: s.inHand, free: s.free, lastRed: s.lastRed };
+      const snap = { reds: s.reds, phase: s.phase, next: s.next, inHand: s.inHand, free: s.free, lastRed: s.lastRed, called: s.called };
       s.scores[opp] += pen;
       s.reds -= Math.min(e.reds || 0, s.reds); // reds potted on a foul stay down
       s.toSpot = byValue(e.colours || []); // colours potted on a foul always go back
@@ -587,11 +607,19 @@ function apply(prev, e) {
       if (!s.foul) throw new Error("no foul to answer");
       const { by, snap } = s.foul;
       if (e.t === "replace") Object.assign(s, snap);
+      else s.called = null;
       s.free = false;
       s.lastRed = e.t === "replace" ? snap.lastRed : false;
       s.turn = by;
       s.foul = null;
       s.log.push({ t: e.t, p: by });
+      return s;
+    }
+    case "call": {
+      // the player names the colour they're going for; tapping another colour changes the call
+      if (s.over || s.toss || s.phase !== "colour" || !COLOURS.includes(e.ball)) throw new Error("nothing to call");
+      s.called = e.ball;
+      s.lastRed = false; // after calling, another red is no longer "the same shot"
       return s;
     }
     case "free": {
@@ -621,6 +649,93 @@ function apply(prev, e) {
     default:
       throw new Error(`unknown event ${e.t}`);
   }
+}
+
+/** Balls the white may hit first right now (the called colour, if one was called). */
+function firstOn(s) {
+  if (s.phase === "colour") return s.called ? [s.called] : COLOURS.slice();
+  return ballsOn(s);
+}
+
+const ON_WORDS = (s) =>
+  s.phase === "red" ? "a red" : s.phase === "colour" ? (s.called ? `the ${s.called} (your call)` : "a colour") : `the ${COLOURS[s.next]}`;
+
+/** Fouls that aren't about which ball was hit or what went in. */
+const OTHER_FOULS = {
+  touch: "Touched a ball with the hand, cue or clothes",
+  push: "Push or double hit (the tip stayed on the white, or hit it twice)",
+  jump: "Jumped the white over a ball",
+  feet: "Both feet off the floor",
+  early: "Played before the balls stopped",
+  "outside-d": "Played from outside the D with the white in hand",
+  seven: "A 7-point foul: reds twice in a row, or used a ball to measure",
+};
+
+/**
+ * Describe a shot in plain words and get the ruling, so nobody has to know the rules first.
+ *   shot = { first: a ball | "nothing", reds: n, colours: [...], white: bool, other: key of OTHER_FOULS, called }
+ *   (reds/colours/white: what went in or off the table; called: the colour they meant, if not called yet)
+ * Returns { result: "pot" | "miss" | "foul", events, reasons, pts?, pen?, why? }
+ */
+function judgeShot(s, shot) {
+  const first = shot.first || "nothing";
+  const reds = Math.min(shot.reds || 0, s.reds);
+  const colours = [...new Set(shot.colours || [])];
+  const reasons = [];
+  // with no call yet, the colour hit first is the one they were playing
+  const called = s.phase === "colour" ? s.called || shot.called || (COLOURS.includes(first) ? first : null) : null;
+  const on = s.phase === "colour" && called ? [called] : firstOn(s);
+  const words = s.phase === "colour" && called ? `the ${called}${s.called ? " (your call)" : ""}` : ON_WORDS(s);
+
+  if (shot.other) reasons.push(`${OTHER_FOULS[shot.other]}.`);
+  if (first === "nothing") reasons.push("The white didn't hit any ball.");
+  else if (!on.includes(first)) reasons.push(`You were on ${words}, but the white hit the ${first} first.`);
+  if (shot.white) reasons.push("The white went in (or off the table).");
+
+  // what went in, and whether it was allowed to
+  const freeBall = s.free && COLOURS.includes(first) && on.includes(first) && first !== (s.phase === "clear" ? COLOURS[s.next] : null);
+  if (s.phase === "red") {
+    for (const c of colours) if (!(freeBall && c === first)) reasons.push(`The ${c} went in, but you were on a red.`);
+  } else if (s.phase === "colour") {
+    if (reds) reasons.push(`A red went in, but you were on a colour.`);
+    for (const c of colours) if (c !== called) reasons.push(called ? `The ${c} went in, but you were on the ${called}.` : `The ${c} went in.`);
+  } else {
+    const ball = COLOURS[s.next];
+    for (const c of colours) if (c !== ball && !(freeBall && c === first)) reasons.push(`The ${c} went in, but you were on the ${ball}.`);
+  }
+
+  if (reasons.length) {
+    const kind = shot.other === "seven" ? "seven" : shot.other === "outside-d" ? "outside-d" : shot.other ? "touch" : shot.white ? "white" : first === "nothing" ? "nothing" : !on.includes(first) ? "wrong-first" : "wrong-pot";
+    const ev = { t: "foul", kind };
+    if (BALLS.includes(first)) ev.hit = first;
+    if (reds) ev.reds = reds;
+    if (colours.length) ev.colours = colours;
+    if (shot.white) ev.white = true;
+    if (s.phase === "colour" && called && !s.called) ev.called = called;
+    const { pen, why } = penalty(s, ev);
+    return { result: "foul", events: [ev], reasons, pen, why };
+  }
+  if (!reds && !colours.length) return { result: "miss", events: [{ t: "miss" }], reasons: [`The white hit ${words} first and nothing went in. That's not a foul.`] };
+
+  const events = [];
+  let pts = 0;
+  if (freeBall && colours.length) {
+    events.push({ t: "pot", ball: colours[0] });
+    pts += s.phase === "red" ? 1 : VALUE[COLOURS[s.next]];
+  }
+  for (let i = 0; i < reds; i++) {
+    events.push(i === 0 && !events.length ? { t: "pot", ball: "red" } : { t: "pot", ball: "red", extra: true });
+    pts += 1;
+  }
+  if (s.phase === "colour") {
+    if (!s.called) events.push({ t: "call", ball: called });
+    events.push({ t: "pot", ball: called });
+    pts += VALUE[called];
+  } else if (s.phase === "clear" && !freeBall) {
+    events.push({ t: "pot", ball: COLOURS[s.next] });
+    pts += VALUE[COLOURS[s.next]];
+  }
+  return { result: "pot", events, reasons: [], pts };
 }
 
 function replayFrame(match, i = match.frames.length - 1) {

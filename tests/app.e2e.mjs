@@ -64,9 +64,18 @@ try {
     assert.match(await p.textContent("#guide"), /break-off/i);
   });
 
-  await step("red then pink scores 7 and asks for the pink to be re-spotted", async () => {
+  await step("red, then tap a colour once to call it and again when it goes in", async () => {
     await p.click(".pad .red");
-    assert.match(await p.textContent("#guide"), /Now any colour/);
+    assert.equal(await score(p, 0), "1");
+    assert.match(await p.textContent("#guide"), /Call a colour/);
+    assert.match(await p.textContent(".pad-hint"), /Tap a colour to call it/);
+    await p.click('.pad [data-ball="pink"]');
+    assert.equal(await score(p, 0), "1", "the first tap only calls it");
+    assert.match(await p.textContent("#guide"), /Going for the pink/);
+    assert.equal(await p.textContent('.pad [data-ball="pink"] .tag'), "CALLED");
+    await p.click('.pad [data-ball="blue"]');
+    assert.match(await p.textContent("#guide"), /Going for the blue/, "changing your mind changes the call");
+    await p.click('.pad [data-ball="pink"]');
     await p.click('.pad [data-ball="pink"]');
     assert.equal(await score(p, 0), "7");
     assert.match(await p.textContent("#alerts"), /Put the pink back/);
@@ -76,13 +85,49 @@ try {
     assert.doesNotMatch(await p.textContent("#alerts"), /Put the pink back/);
   });
 
-  await step("a colour while on a red explains the foul and gives the points to the other side", async () => {
-    await p.click('.pad [data-ball="blue"]');
-    assert.match(await p.textContent("#sheet"), /You're on a red/);
+  await step("on a red, the white hit a colour first: What happened? says it's a foul and why", async () => {
+    await p.click("#btn-foul");
+    assert.match(await p.textContent("#sheet"), /You were on a red/);
+    assert.match(await p.textContent("#sheet .verdict"), /Not a foul/, "starts from: hit a red, nothing went in");
+    await p.click('#sheet .chips >> nth=0 >> button:has-text("Blue")');
+    assert.match(await p.textContent("#sheet .verdict"), /Foul: 5 points to Rohan/);
+    assert.match(await p.textContent("#sheet .verdict"), /on a red, but the white hit the blue first/);
+    assert.match(await p.textContent("#sheet .verdict"), /not ball in hand/);
+    await shot(p, "what-happened");
     await p.click('.verdict button:has-text("Give 5 to Rohan")');
     assert.equal(await score(p, 1), "5");
     assert.match(await p.textContent("#alerts"), /Foul by Parth/);
-    assert.match(await p.textContent("#alerts"), /Put the blue back/);
+  });
+
+  await step("tapping a colour while on a red asks what happened instead of guessing", async () => {
+    await p.click('#alerts button:has-text("I\'ll play")');
+    await p.click('.pad [data-ball="green"]');
+    assert.match(await p.textContent("#sheet"), /You're on a red/);
+    assert.match(await p.textContent("#sheet .verdict"), /Foul: 4 points to Parth/);
+    await p.click("#sheet .close");
+  });
+
+  await step("missed: nothing went in, turn passes, no points", async () => {
+    await p.click("#btn-miss");
+    assert.match(await p.locator(".player.at").textContent(), /Parth/);
+    assert.equal(await score(p, 1), "5");
+  });
+
+  await step("in-off after a red: foul, red stays down, white in hand with the D drawn", async () => {
+    await p.click("#btn-foul");
+    await p.click('#sheet .chips >> nth=1 >> button:has-text("White")');
+    await p.click('#sheet .chips >> nth=1 >> button[aria-label="One more red"]');
+    assert.match(await p.textContent("#sheet .verdict"), /Foul: 4 points to Rohan/);
+    assert.match(await p.textContent("#sheet .verdict"), /the red stays down/);
+    await p.click(".verdict .btn");
+    assert.equal(await score(p, 1), "9");
+    assert.match(await p.textContent(".pad .red"), /× 13/);
+    assert.match(await p.textContent("#alerts"), /White in hand: anywhere in the D/);
+    assert.equal(await p.locator("#guide svg.table .d-hot").count(), 1, "the D is drawn next to what's on");
+    await p.click("#btn-foul");
+    await p.click("#sheet details.more summary");
+    assert.equal(await p.locator('.choice:has-text("outside the D")').count(), 1, "offered with the white in hand");
+    await p.click("#sheet .close");
   });
 
   await step("free ball: any colour counts as a red", async () => {
@@ -90,25 +135,25 @@ try {
     await p.click('#sheet button:has-text("Take the free ball")');
     assert.equal(await p.locator(".pad .tag").count(), 6);
     await p.click('.pad [data-ball="green"]');
-    assert.equal(await score(p, 1), "6");
-    assert.match(await p.textContent("#guide"), /Now any colour/);
+    assert.equal(await score(p, 1), "10");
+    assert.match(await p.textContent("#guide"), /Call a colour/);
     await p.click("#btn-undo");
-    assert.equal(await score(p, 1), "5");
+    assert.equal(await score(p, 1), "9");
   });
 
   await step("two reds in one shot", async () => {
-    await p.click(".pad .red"); // still Rohan's free-ball visit after the undo; a red is fine too
     await p.click(".pad .red");
-    await p.click('#sheet button:has-text("Yes, same shot")');
-    assert.equal(await score(p, 1), "7");
-    assert.match(await p.textContent(".pad .red"), /× 12/);
+    assert.match(await p.textContent(".pad .red"), /Another red in, same shot/);
+    await p.click(".pad .red");
+    assert.equal(await score(p, 1), "11");
+    assert.equal(await p.getAttribute(".pad .red", "aria-label"), "Another red went in on the same shot (11 left)");
   });
 
   await step("the game survives a reload", async () => {
     await p.reload();
-    await p.click("#resume button");
+    await p.click("#resume .resume-row .btn.big");
     assert.equal(await score(p, 0), "7");
-    assert.equal(await score(p, 1), "7");
+    assert.equal(await score(p, 1), "11");
   });
 
   await step("quick answers are worked out for the player at the table", async () => {
@@ -119,31 +164,32 @@ try {
     assert.match(await first.textContent(), /Parth\s*gets/);
     await p.fill(".ask-input", "If I call a coloured ball, can I pot it by hitting a red ball");
     assert.match(await p.locator("#sheet details.qa").first().textContent(), /must hit the colour you called first/);
+    await p.fill(".ask-input", "reset the game");
+    assert.match(await p.locator("#sheet details.qa").first().textContent(), /Restart this frame/);
     await p.click("#sheet .close");
   });
 
-  await step("after an in-off the next player sees the D, and can log playing from outside it", async () => {
-    const before = Number(await score(p, 0));
-    await p.click("#btn-foul");
-    assert.equal(await p.locator('.choice:has-text("outside the D")').count(), 0, "only offered with the white in hand");
-    await p.click('.choice:has-text("Potted the white")');
-    // Rohan was on a colour and hadn't called one, so the rules make it 7
-    assert.equal(await p.textContent(".verdict .btn"), "Give 7 to Parth");
-    await p.click(".verdict .btn");
-    assert.equal(Number(await score(p, 0)), before + 7);
-    assert.match(await p.textContent("#alerts"), /White in hand: anywhere in the D/);
-    assert.match(await p.textContent("#guide"), /White in hand/);
-    assert.equal(await p.locator("#guide svg.table .d-hot").count(), 1, "the D is drawn next to what's on");
-    await p.click('#alerts button:has-text("Show me")');
-    assert.match(await p.textContent("#sheet"), /move it as often as you like/);
-    await p.click("#sheet .close");
-    await p.click(".ask-btn");
-    assert.match(await p.textContent("#sheet"), /Where do I put the white after an in-off/);
-    await p.click("#sheet .close");
-    await p.click("#btn-foul");
-    assert.equal(await p.locator('.choice:has-text("Played from outside the D")').count(), 1);
-    await shot(p, "in-hand-foul");
-    await p.click("#sheet .close");
+  await step("restart the frame, reset the game, delete it", async () => {
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Restart this frame")');
+    await p.click('#sheet button:has-text("Keep it")');
+    assert.equal(await score(p, 1), "11", "keep it changes nothing");
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Restart this frame")');
+    await p.click('#sheet button:has-text("Restart frame")');
+    assert.equal(await score(p, 0), "0");
+    assert.equal(await score(p, 1), "0");
+    assert.match(await p.textContent("#guide"), /break-off/i);
+    await p.click(".pad .red");
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Reset the whole game")');
+    await p.click('#sheet button:has-text("Reset game")');
+    assert.equal(await score(p, 0), "0");
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Delete this game")');
+    await p.click('#sheet button:has-text("Delete game")');
+    await p.waitForSelector("#view-home:not([hidden])");
+    assert.equal(await p.locator("#resume").isHidden(), true, "nothing left to carry on");
   });
 
   /* ---------------- two phones ---------------- */
@@ -184,8 +230,11 @@ try {
     assert.equal(await mine.locator(".pad .red").isDisabled(), false);
     // a quick burst of taps over a slow, out-of-order network still lands in order
     await mine.click(".pad .red");
-    await mine.click('.pad [data-ball="black"]');
+    await mine.click('.pad [data-ball="black"]'); // call
+    await mine.click('.pad [data-ball="black"]'); // potted
     await mine.click(".pad .red");
+    await mine.click('.pad [data-ball="pink"]');
+    await theirs.waitForSelector("#guide >> text=Going for the pink", { timeout: 8000 }); // the call shows on the other phone
     await mine.click('.pad [data-ball="pink"]');
     assert.equal(await score(mine, me), "15");
     await theirs.waitForFunction((p) => document.querySelectorAll(".player .p-score")[p].textContent === "15", me, { timeout: 8000 });
@@ -198,6 +247,15 @@ try {
     await mine.click("#btn-miss");
     await theirs.waitForFunction(() => !document.querySelector(".pad .red").disabled, null, { timeout: 8000 });
     assert.equal(await mine.locator(".pad .red").isDisabled(), true);
+  });
+
+  await step("restarting a shared frame needs the other side to agree", async () => {
+    await a.click('[data-open="menu"]');
+    await a.click('#sheet button:has-text("Restart this frame")');
+    await b.waitForSelector("#alerts >> text=Asha wants to restart this frame", { timeout: 8000 });
+    assert.notEqual(await score(a, 0) + await score(a, 1), "00", "nothing wiped yet");
+    await b.click('#alerts button:has-text("Agree")');
+    await a.waitForFunction(() => [...document.querySelectorAll(".player .p-score")].every((e) => e.textContent === "0"), null, { timeout: 8000 });
   });
 
   await step("someone with the link after both joined can only watch", async () => {

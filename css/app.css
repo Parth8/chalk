@@ -350,7 +350,7 @@ main {
 
 /* ---------------- actions ---------------- */
 
-.actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.actions { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 8px; }
 .actions .btn { min-height: 56px; }
 .actions .btn b { font-size: 15px; }
 
@@ -562,3 +562,29 @@ svg.table .b-white { fill: #fbfaf5; }
   .pad { gap: 12px 10px; }
   .p-score { font-size: 52px; }
 }
+
+/* ---------------- calling, hints, rulings ---------------- */
+
+.pad .ball.callable { opacity: 0.92; filter: none; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--hair); }
+.pad .ball.called { transform: scale(1.08); box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--accent), 0 8px 18px rgba(0, 0, 0, 0.25); }
+.pad .ball.callable .tag { background: var(--ink-soft); color: var(--bg); }
+.pad .red .count { white-space: nowrap; }
+.pad-hint { grid-column: 1 / -1; margin: 2px 0 0; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--ink-soft); }
+
+.shot { display: flex; flex-direction: column; gap: 12px; }
+.chip small { font-size: 10px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; }
+.more { border: 1.5px solid var(--hair); border-radius: 14px; padding: 0 12px; }
+.more summary { padding: 12px 0; font-weight: 650; font-size: 14px; color: var(--ink-soft); cursor: pointer; }
+.more .choices { grid-template-columns: 1fr; padding-bottom: 12px; }
+.verdict { border-top: 0; border-radius: 16px; padding: 12px 14px; margin-top: 2px; position: sticky; bottom: calc(-18px - env(safe-area-inset-bottom)); }
+.verdict p { text-align: left; color: var(--ink-soft); }
+.verdict .v-title { font-size: 18px; font-weight: 800; color: var(--ink); }
+.verdict.ok { background: var(--accent-tint); }
+.verdict.miss { background: var(--press); }
+.verdict.foul { background: var(--warn-tint); }
+.verdict.foul .v-title { color: var(--warn); }
+.reasons { margin: 0; padding-left: 18px; font-size: 14px; color: var(--ink); display: flex; flex-direction: column; gap: 3px; }
+.resume-row { display: flex; gap: 8px; align-items: center; }
+.resume-row > .btn { flex: 1; align-items: flex-start; }
+.resume-row > .icon-btn { flex: none; font-size: 15px; color: var(--ink-soft); }
+.pad .red.extra { height: 44px; border-radius: 22px; opacity: 0.85; font-size: 14px; }

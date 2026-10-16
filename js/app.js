@@ -1,10 +1,10 @@
 // The page: views, the ball pad, guidance, the foul sheet, the re-spot helper, quick answers,
 // and keeping a shared game in step. All the rules live in engine.js.
 
-import { BALLS, COLOURS, VALUE, ballsOn, judgePot, penalty, replayFrame, framesWon, newMatch, nextFrame, standing } from "./engine.js";
+import { BALLS, COLOURS, VALUE, ballsOn, firstOn, judgePot, judgeShot, OTHER_FOULS, replayFrame, framesWon, newMatch, nextFrame, standing } from "./engine.js";
 import { QA, TOPICS, context, search, suggestions, byId } from "./rules.js";
 import { tableSVG, spotOrder, SPOT_WORDS } from "./table.js";
-import { api, seatFor, keepSeat, seats } from "./api.js";
+import { api, seatFor, keepSeat, forgetSeat, seats } from "./api.js";
 import { installWay, installPlace, appleGuide, canOpenSafari, onInstallChange, promptInstall } from "./install.js";
 import { guideArt } from "./guide.js";
 
@@ -125,14 +125,22 @@ function renderHome() {
   resume.replaceChildren();
   const saved = loadLocal();
   const parts = [];
+  const item = (open, label, sub, removeLabel, remove) =>
+    h(
+      "div",
+      { class: "resume-row" },
+      btn([h("span", { text: label }), h("small", { text: sub })], open, "btn big"),
+      btn("✕", remove, "icon-btn", { "aria-label": removeLabel, title: removeLabel })
+    );
   if (saved) {
     const s = replayFrame(saved);
     const n = saved.players;
     parts.push(
-      btn(
-        [h("span", { text: `Carry on: ${n[0]} v ${n[1]}` }), h("small", { text: `Frame ${saved.frames.length} · ${s.scores[0]}–${s.scores[1]}${s.over ? " · finished" : ""}` })],
-        () => openLocal(saved),
-        "btn big"
+      item(() => openLocal(saved), `Carry on: ${n[0]} v ${n[1]}`, `Frame ${saved.frames.length} · ${s.scores[0]}–${s.scores[1]}${s.over ? " · finished" : ""}`, "Delete this game", () =>
+        confirmSheet("Delete this game?", `${n[0]} v ${n[1]}: every frame and score on this phone goes.`, "Delete game", () => {
+          deleteLocal();
+          renderHome();
+        })
       )
     );
   }
@@ -140,12 +148,23 @@ function renderHome() {
   if (recent && Date.now() - recent[1].at < 2 * 86400_000) {
     const [id, s] = recent;
     parts.push(
-      btn([h("span", { text: "Back to your shared game" }), h("small", { text: (s.names || []).filter(Boolean).join(" v ") || id })], () => openOnline(id, true), "btn big")
+      item(() => openOnline(id, true), "Back to your shared game", (s.names || []).filter(Boolean).join(" v ") || id, "Remove from this phone", () =>
+        confirmSheet("Remove this shared game?", "It's taken off this phone and you lose your seat in it. The other side keeps their copy.", "Remove", () => {
+          forgetSeat(id);
+          renderHome();
+        })
+      )
     );
   }
   resume.hidden = !parts.length;
   resume.append(...parts);
   for (const b of $("#reds-pick").children) b.setAttribute("aria-checked", String(+b.dataset.reds === ui.redsPick));
+}
+
+function deleteLocal() {
+  try {
+    localStorage.removeItem(LOCAL);
+  } catch {}
 }
 
 /* ---------------- this phone ---------------- */
@@ -436,7 +455,7 @@ async function dispatch(e) {
   // (Sent together, a later move can arrive first: a black before the red it follows.)
   if (e.t === "undo") eventsNow().pop();
   else if (e.t === "next") match = nextFrame(match);
-  else eventsNow().push({ ...e, by: online.seat });
+  else if (e.t !== "restart" && e.t !== "restart-no") eventsNow().push({ ...e, by: online.seat });
   render();
   const run = online.run;
   online.pending++;
@@ -469,20 +488,28 @@ function undoLocal() {
   else if (match.frames.length > 1) match.frames.pop();
 }
 
+/**
+ * A tap on a ball:
+ *   on a red             red = potted
+ *   on a colour          first tap calls it, a second tap on the same colour = potted
+ *   in the clearance     the ball on = potted
+ * Anything else opens "What happened?", which works out whether it was a foul.
+ */
 function onBall(ball) {
   const s = state();
   if (!can("turn", s)) return;
+  if (s.phase === "colour" && ball !== "red" && s.called !== ball) return dispatch({ t: "call", ball });
   const j = judgePot(s, ball);
-  if (j.ok && j.extra) return twoRedsSheet();
+  if (j.ok && j.extra) return dispatch({ t: "pot", ball, extra: true }); // the button says "another red in, same shot"
   if (j.ok) return dispatch({ t: "pot", ball });
   if (j.reason !== "foul") return;
-  const why =
+  const intro =
     s.phase === "red"
-      ? `You're on a red, so the ${ball} going in is a foul. (Any colour only counts as a red with a free ball, after a foul.)`
+      ? `You're on a red, so the white has to hit a red first, and only reds may go in. What happened with the ${ball}?`
       : s.phase === "colour"
-        ? `You're on a colour, so a red going in is a foul.`
-        : `You're on the ${COLOURS[s.next]}. Potting the ${ball} now is a foul.`;
-  foulSheet({ kind: "wrong-pot", ...(ball === "red" ? { reds: 1 } : { colours: [ball] }) }, why);
+        ? `You called the ${s.called}. What happened with the red?`
+        : `You're on the ${COLOURS[s.next]}. What happened with the ${ball}?`;
+  shotSheet(ball === "red" ? { reds: 1 } : { first: ball }, intro);
 }
 
 /* ------------------------------------------------------------------ */
@@ -587,7 +614,7 @@ function renderGuide(s) {
         "div",
         { class: "g-card foul", "data-key": `foul-${evKey()}` },
         h("p", { class: "g-kicker", text: `Foul by ${off}` }),
-        h("p", { class: "g-title", text: `${s.foul.pen} to ${inc}` }),
+        h("p", { class: "g-title", text: `${s.foul.pen} points to ${inc}` }),
         h(
           "p",
           { class: "g-text" },
@@ -601,15 +628,34 @@ function renderGuide(s) {
           ? h(
               "div",
               { class: "row" },
-              btn("Play on", () => {
+              btn("I'll play", () => {
                 ui.foulDone = evKey();
                 render();
               }, "btn primary"),
               btn(`${off} plays again`, () => dispatch({ t: "again" })),
-              btn("Free ball", () => freeBallSheet()),
-              btn("Miss: put back", () => missSheet(off))
+              btn("Free ball (I'm snookered)", () => freeBallSheet()),
+              btn("Put balls back (miss)", () => missSheet(off))
             )
           : h("p", { class: "g-text", text: `${inc} decides: play on, make ${off} play again, or take a free ball if snookered.` })
+      )
+    );
+  }
+
+  const ask = mode === "online" && match.frames[match.frames.length - 1].ask;
+  if (ask) {
+    const what = ask.all ? "start the whole game over (every frame back to 0)" : "restart this frame (scores back to 0)";
+    const mineAsk = ask.by === online.seat;
+    alerts.unshift(
+      h(
+        "div",
+        { class: "g-card foul", "data-key": `ask-${ask.by}-${ask.all}` },
+        h("p", { class: "g-kicker", text: "Restart?" }),
+        h("p", { class: "g-title", text: mineAsk ? `Waiting for ${n[1 - ask.by]} to agree` : `${n[ask.by]} wants to ${what}` }),
+        mineAsk
+          ? h("div", { class: "row" }, btn("Cancel", () => dispatch({ t: "restart-no" })))
+          : online.seat !== null
+            ? h("div", { class: "row" }, btn("Agree", () => dispatch({ t: "restart", all: ask.all }), "btn warn"), btn("No, keep playing", () => dispatch({ t: "restart-no" })))
+            : null
       )
     );
   }
@@ -618,7 +664,7 @@ function renderGuide(s) {
   if (spot) alerts.push(spot);
 
   if (!s.over && !s.toss) {
-    const on = onColour(s);
+    let on = onColour(s);
     let kicker = `${me} · at the table`;
     let title;
     let text;
@@ -633,10 +679,14 @@ function renderGuide(s) {
       const breakOff = eventsNow().length === 0;
       if (breakOff) kicker = `${me} · break-off`;
       title = "Pot any red";
-      text = breakOff ? "White anywhere in the D. Hit a red first." : `${s.reds} red${s.reds === 1 ? "" : "s"} left. Then a colour of your choice.`;
+      text = breakOff ? "White anywhere in the D. Hit a red first." : `${s.reds} red${s.reds === 1 ? "" : "s"} left. After a red, you call a colour.`;
+    } else if (s.phase === "colour" && !s.called) {
+      title = "Call a colour";
+      text = `Tap the colour you're going for.${s.reds > 0 ? "" : " (That was the last red: after this colour it's yellow to black in order.)"}`;
     } else if (s.phase === "colour") {
-      title = "Now any colour";
-      text = s.reds > 0 ? "Call it, then pot it. It goes back on its spot, then it's reds again." : "That was the last red: one colour of your choice, then yellow to black in order.";
+      on = s.called;
+      title = `Going for the ${s.called} (${VALUE[s.called]})`;
+      text = `Tap the ${s.called} again when it goes in. Changed your mind? Tap another colour.`;
     } else {
       title = `${cap(on)} (${VALUE[on]})`;
       text = "Colours in order now. They stay down.";
@@ -730,27 +780,39 @@ function renderPad(s) {
   const turn = can("turn", s);
   const pad = $("#pad");
   pad.classList.toggle("locked", !turn);
-  pad.replaceChildren(
-    ...BALLS.map((b) => {
-      const isOn = on.includes(b);
-      const free = s.free && isOn && b !== "red" && !(s.phase === "clear" && b === COLOURS[s.next]);
-      const disabled = !turn || (b === "red" && s.reds === 0);
-      const label = b === "red" ? `Red, ${s.reds} left` : `${cap(b)}, ${VALUE[b]}`;
-      return h(
-        "button",
-        {
-          type: "button",
-          class: `ball ${b === "red" ? "red" : ""} ${isOn ? "on" : "off"}`,
-          "data-ball": b,
-          "aria-label": `${label}${isOn ? "" : " (not on)"}`,
-          disabled,
-          on: { click: () => onBall(b) },
-        },
-        b === "red" ? (s.reds ? ["Red", h("span", { class: "count", text: `× ${s.reds}` })] : "No reds left") : String(VALUE[b]),
-        free ? h("span", { class: "tag", text: "FREE" }) : null
-      );
-    })
-  );
+  const callable = s.phase === "colour" && !s.free;
+  const balls = BALLS.map((b) => {
+    const called = callable && s.called === b;
+    const isOn = callable ? b !== "red" && (!s.called || called) : on.includes(b);
+    const free = s.free && on.includes(b) && b !== "red" && !(s.phase === "clear" && b === COLOURS[s.next]);
+    const extraRed = b === "red" && s.phase === "colour" && s.lastRed && s.reds > 0;
+    const disabled = !turn || (b === "red" && s.reds === 0);
+    const label = b === "red" ? `Red, ${s.reds} left` : `${cap(b)}, ${VALUE[b]}`;
+    const tag = free ? "FREE" : called ? "CALLED" : callable && b !== "red" && !s.called ? "CALL" : null;
+    return h(
+      "button",
+      {
+        type: "button",
+        class: `ball ${b === "red" ? "red" : ""} ${isOn ? "on" : extraRed ? "extra" : "off"}${called ? " called" : ""}${callable && b !== "red" && !s.called ? " callable" : ""}`,
+        "data-ball": b,
+        "aria-label": extraRed ? `Another red went in on the same shot (${s.reds} left)` : callable && b !== "red" ? (called ? `${label}: potted` : `Call the ${b}`) : `${label}${isOn ? "" : " (not on)"}`,
+        disabled,
+        on: { click: () => onBall(b) },
+      },
+      b === "red" ? (s.reds ? (extraRed ? ["Another red in, same shot", h("span", { class: "count", text: "+1" })] : ["Red", h("span", { class: "count", text: `× ${s.reds}` })]) : "No reds left") : String(VALUE[b]),
+      tag ? h("span", { class: "tag", text: tag }) : null
+    );
+  });
+  pad.replaceChildren(...balls, turn ? h("p", { class: "pad-hint", text: padHint(s) }) : null);
+}
+
+/** One plain line under the balls: what to tap now. */
+function padHint(s) {
+  if (s.free) return "Free ball: tap the colour you potted as the free ball, or a red if a red went in.";
+  if (s.phase === "red") return "A red went in? Tap Red. Nothing went in? Tap Missed.";
+  if (s.phase === "colour" && !s.called) return "Tap a colour to call it.";
+  if (s.phase === "colour") return `Called the ${s.called}: tap it again when it goes in, or tap Missed.`;
+  return `Tap the ${COLOURS[s.next]} when it goes in, or tap Missed.`;
 }
 
 function renderActions(s) {
@@ -759,7 +821,7 @@ function renderActions(s) {
   $("#btn-foul").disabled = !turn;
   $("#btn-undo").disabled = !can("undo", s);
   const last = eventsNow()[eventsNow().length - 1];
-  $("#undo-sub").textContent = !last ? (match.frames.length > 1 ? "new frame" : "last tap") : last.t === "pot" ? `the ${last.ball}` : { miss: "the miss", foul: "the foul", again: "play again", replace: "put back", free: "free ball", toss: "the toss", concede: "concede" }[last.t] || "last tap";
+  $("#undo-sub").textContent = !last ? (match.frames.length > 1 ? "new frame" : "last tap") : last.t === "pot" ? `the ${last.ball}` : last.t === "call" ? `${last.ball} call` : { miss: "the miss", foul: "the foul", again: "play again", replace: "put back", free: "free ball", toss: "the toss", concede: "concede" }[last.t] || "last tap";
 }
 
 function renderLog(s) {
@@ -829,25 +891,6 @@ function closeSheet() {
 $("#scrim").addEventListener("click", closeSheet);
 document.addEventListener("keydown", (e) => e.key === "Escape" && !$("#sheet").hidden && closeSheet());
 
-function twoRedsSheet() {
-  openSheet(
-    "Another red?",
-    h("p", { class: "lead-text", text: "Did two reds go in on the same shot? Both count, a point each." }),
-    h(
-      "div",
-      { class: "row" },
-      btn("Yes, same shot (+1)", () => {
-        closeSheet();
-        dispatch({ t: "pot", ball: "red", extra: true });
-      }, "btn primary big"),
-      btn("No, a new shot", () => {
-        closeSheet();
-        foulSheet({ kind: "seven", reds: 1 }, "After a red you must play a colour. Playing at a red instead is a 7-point foul.");
-      }, "btn big")
-    )
-  );
-}
-
 function freeBallSheet() {
   const s = state();
   const val = s.phase === "red" ? 1 : VALUE[COLOURS[s.next]];
@@ -880,161 +923,142 @@ function missSheet(off) {
   );
 }
 
-const FOULS = [
-  ["white", "Potted the white", "In-off, or it left the table"],
-  ["nothing", "Hit nothing", "Missed every ball"],
-  ["wrong-first", "Hit the wrong ball first", "e.g. a red when you'd called a colour"],
-  ["wrong-pot", "Potted a ball that wasn't on", "Add it below"],
-  ["off", "Knocked a ball off the table", "Add it below"],
-  ["touch", "Touched a ball, push or jump", "Hand, cue or clothes · double hit · feet off the floor"],
-  ["seven", "A 7-point foul", "Reds twice in a row · used a ball to measure"],
-  ["outside-d", "Played from outside the D", "With the white in hand", (s) => s.inHand],
-];
-
-function foulSheet(prefill = {}, why = "") {
+/**
+ * "What happened?": describe the shot in plain words and the app rules on it
+ * (potted, missed, or a foul with the reason and the points), so nobody needs the rulebook.
+ */
+function shotSheet(prefill = {}, intro = "") {
   const s = state();
   const n = names();
-  const off = n[s.turn];
+  const me = n[s.turn];
   const opp = n[1 - s.turn];
-  const f = { kind: prefill.kind || null, hit: prefill.hit || null, reds: prefill.reds || 0, colours: new Set(prefill.colours || []), white: prefill.kind === "white", called: null };
-  const body = h("div", { class: "choices-wrap", style: "display:flex;flex-direction:column;gap:14px" });
+  const onFirst = firstOn(s);
+  const shot = {
+    first: prefill.first || (onFirst.length === 1 ? onFirst[0] : s.phase === "red" ? "red" : null),
+    reds: prefill.reds || 0,
+    colours: new Set(prefill.colours || []),
+    white: false,
+    other: null,
+    called: null,
+  };
+  const body = h("div", { class: "shot" });
 
-  const chip = (ball, pressed, onClick, extra) =>
-    h("button", { type: "button", class: "chip ball-chip", "aria-pressed": String(pressed), on: { click: onClick } }, dot(ball), cap(ball), extra);
+  const chip = (label, pressed, onClick, { ball, sub } = {}) =>
+    h("button", { type: "button", class: `chip${ball ? " ball-chip" : ""}`, "aria-pressed": String(pressed), on: { click: onClick } }, ball ? dot(ball) : null, label, sub ? h("small", { text: sub }) : null);
+  const set = (fn) => () => {
+    fn();
+    draw();
+  };
 
   const draw = () => {
-    const sections = [];
-    if (why) sections.push(h("p", { class: "explain", text: why }));
-    sections.push(
-      h("h3", { text: "What happened?" }),
+    const parts = [];
+    const onText = s.phase === "red" ? "a red" : s.phase === "colour" ? (s.called ? `the ${s.called} (called)` : "a colour (none called yet)") : `the ${COLOURS[s.next]}`;
+    parts.push(h("p", { class: "lead-text" }, intro || "Tell me what happened and I'll work out the rest. ", intro ? null : ["You were on ", h("b", { text: onText }), "."]));
+
+    // 1. first contact
+    const order = [...onFirst, ...BALLS.filter((b) => !onFirst.includes(b))].filter((b) => b !== "red" || s.reds > 0);
+    parts.push(
+      h("h3", { text: "1. What did the white hit first?" }),
+      h(
+        "div",
+        { class: "chips" },
+        order.map((b) => chip(cap(b), shot.first === b, set(() => (shot.first = b)), { ball: b, sub: onFirst.includes(b) ? "on" : null })),
+        chip("Nothing", shot.first === "nothing", set(() => (shot.first = "nothing")))
+      )
+    );
+
+    // 2. what went in
+    const none = !shot.white && !shot.reds && !shot.colours.size;
+    parts.push(
+      h("h3", { text: "2. What went in? (or flew off the table)" }),
+      h(
+        "div",
+        { class: "chips" },
+        chip("Nothing", none, set(() => Object.assign(shot, { white: false, reds: 0, colours: new Set() }))),
+        chip("White", shot.white, set(() => (shot.white = !shot.white)), { ball: "white" }),
+        s.reds
+          ? h(
+              "span",
+              { class: "chip ball-chip", "aria-pressed": String(shot.reds > 0) },
+              dot("red"),
+              `Red × ${shot.reds}`,
+              h(
+                "span",
+                { class: "stepper" },
+                btn("−", set(() => (shot.reds = Math.max(0, shot.reds - 1))), "", { "aria-label": "One red fewer" }),
+                btn("+", set(() => (shot.reds = Math.min(s.reds, shot.reds + 1))), "", { "aria-label": "One more red" })
+              )
+            )
+          : null,
+        COLOURS.map((c) => chip(cap(c), shot.colours.has(c), set(() => (shot.colours.has(c) ? shot.colours.delete(c) : shot.colours.add(c))), { ball: c }))
+      )
+    );
+
+    // a colour hadn't been called yet and the white didn't hit one: which were they going for?
+    if (s.phase === "colour" && !s.called && shot.first && !COLOURS.includes(shot.first)) {
+      parts.push(
+        h("h3", { text: "Which colour were you going for?" }),
+        h(
+          "div",
+          { class: "chips" },
+          COLOURS.map((c) => chip(cap(c), shot.called === c, set(() => (shot.called = shot.called === c ? null : c)), { ball: c })),
+          chip("Hadn't said", !shot.called, set(() => (shot.called = null)))
+        )
+      );
+    }
+
+    // 3. anything else
+    const more = h(
+      "details",
+      { class: "more" },
+      h("summary", { text: shot.other ? `3. Also: ${OTHER_FOULS[shot.other].toLowerCase()}` : "3. Anything else? (touched a ball, push, jump…)" }),
       h(
         "div",
         { class: "choices" },
-        FOULS.filter(([, , , when]) => !when || when(s)).map(([k, label, sub]) =>
-          h(
-            "button",
-            {
-              type: "button",
-              class: "choice",
-              "aria-pressed": String(f.kind === k),
-              on: {
-                click: () => {
-                  f.kind = k;
-                  if (k === "white") f.white = true;
-                  draw();
-                },
-              },
-            },
-            label,
-            h("small", { text: sub })
-          )
-        )
+        Object.entries(OTHER_FOULS)
+          .filter(([k]) => k !== "outside-d" || s.inHand)
+          .map(([k, label]) => h("button", { type: "button", class: "choice", "aria-pressed": String(shot.other === k), on: { click: set(() => (shot.other = shot.other === k ? null : k)) } }, label))
       )
     );
-    if (f.kind === "wrong-first" || f.kind === "touch") {
-      sections.push(
-        h("h3", { text: f.kind === "touch" ? "Which ball? (if one was touched)" : "Which ball did the white hit first?" }),
-        h(
-          "div",
-          { class: "chips" },
-          BALLS.map((b) =>
-            chip(b, f.hit === b, () => {
-              f.hit = f.hit === b ? null : b;
-              draw();
-            })
-          )
-        )
-      );
-    }
-    if (f.kind !== "seven") {
-      const reds = Math.min(s.reds, 15);
-      sections.push(
-        h("h3", { text: "Potted or off the table on this shot" }),
-        h(
-          "div",
-          { class: "chips" },
-          h(
-            "button",
-            {
-              type: "button",
-              class: "chip ball-chip",
-              "aria-pressed": String(f.white),
-              on: {
-                click: () => {
-                  f.white = !f.white;
-                  draw();
-                },
-              },
-            },
-            dot("white"),
-            "White"
-          ),
-          reds
-            ? h(
-                "span",
-                { class: "chip ball-chip", "aria-pressed": String(f.reds > 0) },
-                dot("red"),
-                `Red × ${f.reds}`,
-                h(
-                  "span",
-                  { class: "stepper" },
-                  btn("−", () => {
-                    f.reds = Math.max(0, f.reds - 1);
-                    draw();
-                  }, "", { "aria-label": "One red fewer" }),
-                  btn("+", () => {
-                    f.reds = Math.min(reds, f.reds + 1);
-                    draw();
-                  }, "", { "aria-label": "One more red" })
-                )
-              )
-            : null,
-          COLOURS.map((c) =>
-            chip(c, f.colours.has(c), () => {
-              f.colours.has(c) ? f.colours.delete(c) : f.colours.add(c);
-              draw();
-            })
-          )
-        )
-      );
-    }
-    if (s.phase === "colour" && f.kind !== "seven") {
-      sections.push(
-        h("h3", { text: "Which colour had you called?" }),
-        h(
-          "div",
-          { class: "chips" },
-          COLOURS.map((c) =>
-            chip(c, f.called === c, () => {
-              f.called = f.called === c ? null : c;
-              draw();
-            })
-          )
-        ),
-        f.called ? null : h("p", { class: "note", text: "Not called? The rules make a foul before calling a colour worth 7." })
-      );
-    }
-    const ev = { kind: f.kind || "other", hit: f.hit || undefined, reds: f.reds || undefined, colours: f.colours.size ? [...f.colours] : undefined, white: f.white || undefined, called: f.called || undefined };
-    const { pen, why: reason } = penalty(s, ev);
-    const after = [];
-    if (f.white) after.push(`${opp} gets the white in hand in the D`);
-    if (f.reds) after.push(`${f.reds === 1 ? "the red stays" : "the reds stay"} down`);
-    if (f.colours.size) after.push(`${[...f.colours].join(" and ")} go${f.colours.size === 1 ? "es" : ""} back on ${f.colours.size === 1 ? "its spot" : "their spots"}`);
-    sections.push(
-      h(
-        "div",
-        { class: "verdict" },
-        h("p", { text: `${cap(reason)}.${after.length ? ` Then ${after.join(", ")}.` : ""}` }),
-        btn(`Give ${pen} to ${opp}`, () => {
+    more.open = !!shot.other;
+    parts.push(more);
+
+    // the ruling
+    if (!shot.first) {
+      parts.push(h("div", { class: "verdict" }, h("p", { text: "Pick what the white hit first." })));
+    } else {
+      const r = judgeShot(s, { first: shot.first, reds: shot.reds, colours: [...shot.colours], white: shot.white, other: shot.other, called: shot.called });
+      const go = (label, cls) =>
+        btn(label, () => {
           closeSheet();
-          dispatch({ t: "foul", ...Object.fromEntries(Object.entries(ev).filter(([, v]) => v !== undefined)) });
-        }, "btn warn big", { disabled: !f.kind })
-      )
-    );
-    body.replaceChildren(...sections);
+          for (const e of r.events) dispatch(e);
+        }, `btn big ${cls}`);
+      if (r.result === "pot") {
+        parts.push(h("div", { class: "verdict ok" }, h("p", { class: "v-title", text: `Fair pot: +${r.pts} to ${me}` }), go(`Add ${r.pts} to ${me}`, "primary")));
+      } else if (r.result === "miss") {
+        parts.push(h("div", { class: "verdict miss" }, h("p", { class: "v-title", text: "Not a foul" }), h("p", { text: `${r.reasons[0]} ${opp}'s turn.` }), go(`Missed: ${opp}'s turn`, "")));
+      } else {
+        const after = [];
+        if (shot.white) after.push(`${opp} puts the white anywhere in the D`);
+        else after.push(`${opp} plays from where the white stopped (not ball in hand)`);
+        if (shot.reds) after.push(`${shot.reds === 1 ? "the red stays" : "the reds stay"} down`);
+        if (shot.colours.size) after.push(`the ${[...shot.colours].join(" and ")} go${shot.colours.size === 1 ? "es" : ""} back on ${shot.colours.size === 1 ? "its spot" : "their spots"}`);
+        parts.push(
+          h(
+            "div",
+            { class: "verdict foul" },
+            h("p", { class: "v-title", text: `Foul: ${r.pen} points to ${opp}` }),
+            h("ul", { class: "reasons" }, r.reasons.map((x) => h("li", { text: x }))),
+            h("p", { text: `Worth ${r.pen} because ${r.why}. Then ${after.join(", ")}.` }),
+            go(`Give ${r.pen} to ${opp}`, "warn")
+          )
+        );
+      }
+    }
+    body.replaceChildren(...parts);
   };
   draw();
-  openSheet(`Foul by ${off}`, body);
+  openSheet("What happened?", body);
 }
 
 function pictureSheet(title, text, opts) {
@@ -1047,6 +1071,7 @@ function menuSheet() {
   const s = state();
   const n = names();
   const items = [];
+  const other = mode === "online" && online.seat !== null ? n[1 - online.seat] : null;
   if (mode === "online") {
     items.push(h("p", { class: "lead-text", text: online.seat === null ? "You're watching. Only the two sides can score." : `You're ${n[online.seat]}. You score your own turns; the other phone scores theirs.` }));
     items.push(h("div", { class: "share-link", text: shareUrl() }), btn("Share game link", shareLink, "btn"));
@@ -1074,28 +1099,89 @@ function menuSheet() {
         })
       );
   }
-  if (mode === "local" && eventsNow().length && !s.over)
+
+  items.push(h("h3", { text: "Restart or reset" }));
+  if (mode === "local") {
     items.push(
-      btn("Re-rack this frame (stalemate)", () => {
-        if (!confirm("Start this frame again from the break? Its scores are cleared.")) return;
+      btn("Restart this frame", () =>
+        confirmSheet("Restart this frame?", "Both scores for this frame go back to 0 and it starts again from the break. Earlier frames are kept.", "Restart frame", () => {
+          eventsNow().length = 0;
+          saveLocal();
+          render();
+        })
+      ),
+      btn("Reset the whole game", () =>
+        confirmSheet("Reset the whole game?", "Every frame is cleared and the frame count goes back to 0–0. Same players, same reds.", "Reset game", () => {
+          match = { ...match, frames: [{ breaker: match.frames[0].breaker, events: [] }] };
+          saveLocal();
+          render();
+        })
+      ),
+      btn("Delete this game", () =>
+        confirmSheet("Delete this game?", "Every frame and score on this phone goes, and you're back at the start.", "Delete game", () => {
+          deleteLocal();
+          goHome();
+        }), "btn warn")
+    );
+  } else if (online.seat !== null && other) {
+    items.push(
+      h("p", { class: "note", text: `Restarting wipes ${other}'s score too, so ${other} has to agree on their phone.` }),
+      btn(`Restart this frame (asks ${other})`, () => {
         closeSheet();
-        eventsNow().length = 0;
-        saveLocal();
-        render();
+        dispatch({ t: "restart" });
+        toast(`Asked ${other} to agree`);
+      }),
+      btn(`Start the whole game over (asks ${other})`, () => {
+        closeSheet();
+        dispatch({ t: "restart", all: true });
+        toast(`Asked ${other} to agree`);
       })
     );
+  }
   items.push(
     btn("Where the balls go", () => pictureSheet("Setting up", "Standing at the baulk end: green left, brown middle, yellow right. Blue in the middle, pink below the reds, black at the top.", { rack: match.reds }))
   );
   items.push(btn("Rules & quick answers", () => askSheet()));
   if (installWay()) items.push(btn(installPlace === "home" ? "Add to home screen" : "Install the app", installSheet));
-  items.push(
-    btn(mode === "local" ? "New game" : "Leave this game", () => {
-      closeSheet();
-      goHome();
-    }, "btn ghost")
+  if (mode === "local")
+    items.push(
+      btn("New game", () => {
+        closeSheet();
+        goHome();
+      }, "btn ghost")
+    );
+  else
+    items.push(
+      btn("Leave this game", () => {
+        closeSheet();
+        goHome();
+      }, "btn ghost"),
+      online.seat !== null
+        ? btn("Remove it from this phone", () =>
+            confirmSheet("Remove this shared game?", "It's taken off this phone and you lose your seat in it. The other side keeps their copy.", "Remove", () => {
+              forgetSeat(online.id);
+              goHome();
+            }), "btn ghost")
+        : null
+    );
+  openSheet(mode === "online" ? "Shared game" : "Game", ...items.filter(Boolean));
+}
+
+/** Are you sure? — for anything that wipes scores. */
+function confirmSheet(title, text, yes, onYes) {
+  openSheet(
+    title,
+    h("p", { class: "lead-text", text }),
+    h(
+      "div",
+      { class: "row" },
+      btn(yes, () => {
+        closeSheet();
+        onYes();
+      }, "btn warn big"),
+      btn("Keep it", closeSheet, "btn big")
+    )
   );
-  openSheet(mode === "online" ? "Shared game" : "Game", ...items);
 }
 
 /* ---------------- ask ---------------- */
@@ -1254,7 +1340,7 @@ $("#local-form").addEventListener("submit", startLocal);
 $("#start-local").addEventListener("click", openLocalSetup);
 $("#start-online").addEventListener("click", startOnline);
 $("#btn-miss").addEventListener("click", () => can("turn") && dispatch({ t: "miss" }));
-$("#btn-foul").addEventListener("click", () => can("turn") && foulSheet());
+$("#btn-foul").addEventListener("click", () => can("turn") && shotSheet());
 $("#btn-undo").addEventListener("click", () => dispatch({ t: "undo" }));
 document.addEventListener("click", (e) => {
   const go = e.target.closest("[data-go]");
