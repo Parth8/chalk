@@ -24,7 +24,7 @@ function pen(c, extra = 0) {
 }
 const spotsBack = "Reds potted on a foul stay down; colours go back on their spots.";
 
-export const TOPICS = ["The white", "Ball in hand", "Missing", "Calling a colour", "Order of play", "Spots", "Fouls", "Snookers & free ball", "End of frame", "Basics"];
+export const TOPICS = ["The white", "Ball in hand", "Missing", "Calling a colour", "Order of play", "Spots", "Fouls", "Snookers & free ball", "End of a game", "Basics"];
 
 export const QA = [
   /* ---------------- The white ---------------- */
@@ -70,7 +70,7 @@ export const QA = [
     q: "When is the white in hand?",
     keys: "when white in hand ball in hand get times",
     a: () =>
-      `Only these times:\n• The **break-off** at the start of a frame\n• After the white is **potted** (in-off)\n• After the white **leaves the table**\n• For a **re-spotted black**\n` +
+      `Only these times:\n• The **break-off** at the start of a game\n• After the white is **potted** (in-off)\n• After the white **leaves the table**\n• For a **re-spotted black**\n` +
       `Every other time, including after other fouls, the white is played from where it stopped.`,
   },
   {
@@ -215,9 +215,9 @@ export const QA = [
     id: "three-miss",
     topic: "Missing",
     q: "Is there a three-miss rule?",
-    keys: "three miss rule 3 times frame lose",
+    keys: "three miss rule 3 times frame game lose",
     a: () =>
-      `Yes, in refereed play: if you have a **clear sight** of a ball on and miss it three times in a row (each called a miss), you lose the frame. You're warned after the second. It doesn't apply when you're snookered.`,
+      `Yes, in refereed play: if you have a **clear sight** of a ball on and miss it three times in a row (each called a miss), you lose the game. You're warned after the second. It doesn't apply when you're snookered.`,
   },
   {
     id: "snookered-hit",
@@ -374,11 +374,11 @@ export const QA = [
     id: "setup",
     topic: "Spots",
     q: "How do I set up the table?",
-    keys: "set up setup rack triangle start frame arrange",
+    keys: "set up setup rack triangle start frame game arrange",
     show: "table",
     a: (c) =>
       `Reds in a tight triangle with the point just behind the pink (not touching), the base towards the black. Colours on their spots. Break from the D with the white.` +
-      (c.s ? ` This frame uses **${c.s.total} reds**.` : ""),
+      (c.s ? ` This game uses **${c.s.total} reds**.` : ""),
   },
 
   /* ---------------- Fouls ---------------- */
@@ -537,39 +537,39 @@ export const QA = [
         : `**${remaining(c.s)}**: ${c.reds} red${c.reds === 1 ? "" : "s"} at 8 each (red + black)${c.phase === "colour" ? ", the colour you're on (up to 7)" : ""}${c.phase === "clear" ? "" : ", plus 27 for the colours"}.`,
   },
 
-  /* ---------------- End of frame ---------------- */
+  /* ---------------- End of a game ---------------- */
   {
     id: "frame-end",
-    topic: "End of frame",
-    q: "When does the frame end?",
-    keys: "frame end over finish win when",
+    topic: "End of a game",
+    q: "When does the game end?",
+    keys: "frame game end over finish win when",
     a: () => `When the last black is potted, or when there's a foul with only the black left, or when someone concedes. If the scores are level at that point, there's a re-spotted black.`,
   },
   {
     id: "tie",
-    topic: "End of frame",
+    topic: "End of a game",
     q: "What if the scores are level after the black?",
     keys: "tie level draw equal same score respot black",
     a: () =>
-      `**Re-spotted black.** The black goes back on its spot, you toss a coin, and the winner chooses who plays. The white is in hand in the D. The next score or foul wins the frame.`,
+      `**Re-spotted black.** The black goes back on its spot, you toss a coin, and the winner chooses who plays. The white is in hand in the D. The next score or foul wins the game.`,
   },
   {
     id: "foul-black",
-    topic: "End of frame",
+    topic: "End of a game",
     q: "What if I foul on the last black?",
     keys: "foul last black final in-off end",
-    a: (c) => `The frame ends: **${c.opp}** gets 7. If that leaves the scores level, it goes to a re-spotted black.`,
+    a: (c) => `The game ends: **${c.opp}** gets 7. If that leaves the scores level, it goes to a re-spotted black.`,
   },
   {
     id: "concede",
-    topic: "End of frame",
-    q: "When can I concede the frame?",
+    topic: "End of a game",
+    q: "When can I concede the game?",
     keys: "concede give up resign forfeit",
-    a: () => `Any time it's your turn. It's considered good manners to only concede once you need snookers. In the app: **⋯ → Concede this frame**.`,
+    a: () => `Any time it's your turn. It's considered good manners to only concede once you need snookers. In the app: **⋯ → Concede this game**.`,
   },
   {
     id: "max",
-    topic: "End of frame",
+    topic: "End of a game",
     q: "What's the maximum break?",
     keys: "maximum max break 147 highest",
     a: () => `**147** with 15 reds (each red with the black, then all the colours). With 10 reds it's ${maxBreak(10)}, with 6 reds ${maxBreak(6)}. A free ball at the start makes up to 155 possible.`,
@@ -593,9 +593,9 @@ export const QA = [
   {
     id: "who-breaks",
     topic: "Basics",
-    q: "Who breaks the next frame?",
-    keys: "who breaks next frame alternate turn",
-    a: () => `You take turns: the player who didn't break this frame breaks the next.`,
+    q: "Who breaks the next game?",
+    keys: "who breaks next frame game alternate turn",
+    a: () => `You take turns: the player who didn't break this game breaks the next.`,
   },
   {
     id: "values",
@@ -617,16 +617,25 @@ export const QA = [
     topic: "Basics",
     q: "What if neither of us can make progress?",
     keys: "stalemate stuck restart re-rack",
-    a: () => `If you both agree it's a stalemate, re-rack and restart the frame (same player breaks).`,
+    a: () => `If you both agree it's a stalemate, re-rack and restart the game (same player breaks).`,
+  },
+  {
+    id: "what-frame",
+    topic: "Basics",
+    q: "What's a frame? What's a match?",
+    keys: "frame what is game match meaning count frames won",
+    a: () =>
+      `A **frame** is just snooker's word for **one game**: set up the balls, play until the table's cleared (or someone gives up), and whoever has more points wins it.\n` +
+      `A **match** is all the games you play in one go. The app counts **games won** for each of you, and you take turns to break.`,
   },
   {
     id: "reset",
     topic: "Basics",
-    q: "How do I restart a frame, reset the scores or delete the game?",
+    q: "How do I restart a game, reset the scores or delete the game?",
     keys: "reset restart delete clear start over new game wipe scores remove",
     a: () =>
-      `Tap **⋯** at the top left. On one phone: **Restart this frame**, **Reset the whole game** or **Delete this game**.\n` +
-      `In a shared game, restarting wipes the other side's score too, so they get a request on their phone and have to **Agree**.`,
+      `Tap **⋯** at the top left. On one phone: **Restart this game**, **Start the match over** or **Delete this match**.\n` +
+      `In a shared match, restarting wipes the other side's score too, so they get a request on their phone and have to **Agree**.`,
   },
   {
     id: "how-tap",

@@ -3,7 +3,7 @@
 
 import { BALLS, COLOURS, VALUE, ballsOn, firstOn, judgePot, judgeShot, OTHER_FOULS, replayFrame, framesWon, newMatch, nextFrame, standing } from "./engine.js";
 import { QA, TOPICS, context, search, suggestions, byId } from "./rules.js";
-import { tableSVG, spotOrder, SPOT_WORDS } from "./table.js";
+import { tableSVG, setupSVG, spotOrder, SPOT_WORDS } from "./table.js";
 import { api, seatFor, keepSeat, forgetSeat, seats } from "./api.js";
 import { installWay, installPlace, appleGuide, canOpenSafari, onInstallChange, promptInstall } from "./install.js";
 import { guideArt } from "./guide.js";
@@ -73,7 +73,7 @@ const buzz = () => navigator.vibrate?.(8);
 let mode = null; // "local" | "online"
 let match = null; // { players, reds, frames: [{ breaker, events }] }
 const online = { id: null, v: 0, seat: null, token: null, game: null, busy: false, timer: null, down: false, queue: Promise.resolve(), pending: 0, run: 0 };
-const ui = { spotKey: "", spotStep: 0, spotFall: 0, foulDone: "", seen: new Set(), redsPick: 15, breakPick: "0", watch: null };
+const ui = { spotKey: "", spotStep: 0, spotFall: 0, foulDone: "", seen: new Set(), setupDone: new Set(), spotDone: "", sheetKind: null, sheetLocked: false, redsPick: 15, breakPick: "0", watch: null };
 
 const state = () => replayFrame(match);
 const names = () => (match ? match.players.map((n, i) => n || `Player ${i + 1}`) : ["Player 1", "Player 2"]);
@@ -136,8 +136,8 @@ function renderHome() {
     const s = replayFrame(saved);
     const n = saved.players;
     parts.push(
-      item(() => openLocal(saved), `Carry on: ${n[0]} v ${n[1]}`, `Frame ${saved.frames.length} · ${s.scores[0]}–${s.scores[1]}${s.over ? " · finished" : ""}`, "Delete this game", () =>
-        confirmSheet("Delete this game?", `${n[0]} v ${n[1]}: every frame and score on this phone goes.`, "Delete game", () => {
+      item(() => openLocal(saved), `Carry on: ${n[0]} v ${n[1]}`, `Game ${saved.frames.length} · ${s.scores[0]}–${s.scores[1]}${s.over ? " · finished" : ""}`, "Delete this match", () =>
+        confirmSheet("Delete this match?", `${n[0]} v ${n[1]}: every game and score on this phone goes.`, "Delete", () => {
           deleteLocal();
           renderHome();
         })
@@ -275,6 +275,10 @@ async function openOnline(id, push = false) {
 
 function applyServer(r) {
   if (!r || r.same) return;
+  // a restart both sides agreed to: the balls need setting up again
+  const asked = match && match.frames && match.frames.length && match.frames[match.frames.length - 1].ask;
+  const now = r.game.frames[r.game.frames.length - 1];
+  if (asked && now && !now.ask && !now.events.length) ui.setupDone.clear();
   online.v = r.v;
   online.game = r.game;
   match = { players: r.game.players, reds: r.game.reds, frames: r.game.frames };
@@ -526,12 +530,167 @@ function render() {
   renderPad(s);
   renderActions(s);
   renderLog(s);
+  gates(s);
+}
+
+/**
+ * Steps that must happen at the table before the next shot, each in a pop-up that only
+ * closes once it's done: set up the table at the start of a game, put potted colours back.
+ * Only on a phone that can play (in a shared game, the side at the table).
+ */
+function gates(s) {
+  const setupKey = `${mode}:${online.id || "local"}:${frameNo()}`;
+  if (!eventsNow().length && !s.over && !ui.setupDone.has(setupKey) && (mode === "local" || online.seat !== null)) {
+    if (ui.sheetKind !== "setup") setupSheet(setupKey);
+    return;
+  }
+  if (s.toSpot.length && !s.toss && ui.spotDone !== evKey() && (mode === "local" || can("turn", s))) {
+    if (ui.sheetKind !== "spot" || ui.spotKey !== evKey()) spotSheet(s);
+    return;
+  }
+  if (ui.sheetKind === "spot" || ui.sheetKind === "setup") closeSheet(); // e.g. undone on the other phone
+}
+
+function setupSheet(key) {
+  const n = names();
+  const breaker = n[match.frames[frameNo() - 1].breaker];
+  const d = (b) => dot(b);
+  openSheet(
+    `Game ${frameNo()}: set up the table`,
+    { locked: true, kind: "setup" },
+    h("p", { class: "lead-text" }, "Put the balls out exactly like this. ", h("b", { text: `${breaker} breaks first.` })),
+    h("div", { class: "table-wrap", html: setupSVG(match.reds) }),
+    h(
+      "ol",
+      { class: "steps" },
+      h("li", {}, h("span", {}, "Stand at the end with the ", h("b", { text: "D" }), " (the half circle). You break from here.")),
+      h("li", {}, h("span", {}, "On the line: ", d("green"), h("b", { text: "green" }), " on the left corner of the D, ", d("brown"), h("b", { text: "brown" }), " in the middle, ", d("yellow"), h("b", { text: "yellow" }), " on the right corner.")),
+      h("li", {}, h("span", {}, d("blue"), h("b", { text: "Blue" }), " on the spot in the very middle of the table.")),
+      h("li", {}, h("span", {}, d("pink"), h("b", { text: "Pink" }), " on the spot halfway between the blue and the far cushion.")),
+      h("li", {}, h("span", {}, d("red"), h("b", { text: `${match.reds} reds` }), " packed in a triangle just behind the pink, point towards it but not touching. A triangle frame makes this easy.")),
+      h("li", {}, h("span", {}, d("black"), h("b", { text: "Black" }), " on the spot near the far cushion.")),
+      h("li", {}, h("span", {}, d("white"), h("b", { text: "White" }), ` anywhere inside the D. ${breaker} plays it at the reds.`))
+    ),
+    btn("The table is ready", () => {
+      ui.setupDone.add(key);
+      closeSheet();
+      render();
+    }, "btn primary big"),
+    btn("New to snooker? How it works", () => learnSheet(0), "link")
+  );
+}
+
+/** "Put the pink back": a pop-up that stays until the ball is back on the table. */
+function spotSheet(s) {
+  const key = evKey();
+  if (ui.spotKey !== key) Object.assign(ui, { spotKey: key, spotStep: 0, spotFall: 0 });
+  const ball = s.toSpot[ui.spotStep];
+  const order = spotOrder(ball);
+  const all = ui.spotFall >= order.length;
+  const at = all ? ball : order[ui.spotFall];
+  const later = s.toSpot.slice(ui.spotStep + 1);
+  const why = s.foul ? "Colours that go in on a foul always come back." : s.reds > 0 || s.phase === "clear" ? "While there are reds left, colours come back on the table after they're potted." : "The colour after the last red comes back too. From now on they stay down.";
+  let where;
+  if (all) where = `Every spot is covered: put it as close to its own spot as you can, towards the far cushion${ball === "pink" || ball === "black" ? " (if that's blocked, straight below its spot)" : ""}, not touching another ball.`;
+  else if (at === ball) where = `On its own spot: ${SPOT_WORDS[ball]}.`;
+  else where = `Its own spot is covered, so use the highest free spot: the ${at} spot (${SPOT_WORDS[at]}).`;
+  const done = () => {
+    ui.spotStep++;
+    ui.spotFall = 0;
+    if (ui.spotStep >= s.toSpot.length) {
+      ui.spotDone = key;
+      closeSheet();
+      render();
+    } else spotSheet(state());
+  };
+  openSheet(
+    `Put the ${ball} back on the table`,
+    { locked: true, kind: "spot" },
+    h("p", { class: "lead-text", text: why }),
+    h("div", { class: "spot-pop" }, h("div", { class: "table-wrap", html: tableSVG({ spot: all ? ball : at, ball, labels: true }) }), h("p", { class: "lead-text" }, h("b", { text: where }))),
+    btn(later.length ? `Done. Next: the ${later[0]}` : all ? `The ${ball} is back on the table` : at === ball ? `The ${ball} is back on its spot` : `The ${ball} is on the ${at} spot`, done, "btn primary big"),
+    all ? null : btn(ui.spotFall ? "That spot's covered too" : "Its spot is covered by another ball", () => {
+      ui.spotFall++;
+      spotSheet(state());
+    }, "btn"),
+    can("undo", s)
+      ? btn(`Oops, the ${ball} didn't go in (undo)`, () => {
+          closeSheet();
+          dispatch({ t: "undo" });
+        }, "link")
+      : null
+  );
+}
+
+const LESSONS = [
+  ["The idea", () => [h("p", {}, "Take turns hitting the ", h("b", { text: "white ball" }), " with your cue to knock the coloured balls into the pockets (", h("b", { text: "potting" }), "). Each ball you pot scores points. More points when the table's cleared wins the game.")]],
+  [
+    "What each ball is worth",
+    () => [
+      h("div", { class: "balls-row" }, ["red", "yellow", "green", "brown", "blue", "pink", "black"].map((b) => h("span", { class: "v" }, dot(b), String(VALUE[b])))),
+      h("p", {}, "There are 15 reds (1 point each) and six colours. You only ever hit the white with the cue."),
+    ],
+  ],
+  ["Your turn", () => [h("p", {}, "Your turn lasts as long as you keep potting. Miss, and it's the other player's turn. The points you score in one turn are your ", h("b", { text: "break" }), ".")]],
+  [
+    "The order",
+    () => [
+      h("p", {}, h("b", { text: "Red first, then a colour, then a red, then a colour…" })),
+      h("p", {}, "Before your colour, say which one you're going for (", h("b", { text: "calling" }), " it). In the app: tap it once to call it, again when it goes in."),
+      h("p", {}, "Reds stay in the pockets. Colours come back out onto their spots, and the app shows you where."),
+    ],
+  ],
+  ["When the reds are gone", () => [h("p", {}, "Pot the colours in order: ", h("b", { text: "yellow, green, brown, blue, pink, black" }), ". Now they stay down. The black is the last ball and ends the game.")]],
+  [
+    "Fouls",
+    () => [
+      h("p", {}, "Hit the wrong ball first, miss everything, or put the white in a pocket? That's a ", h("b", { text: "foul" }), ": the other player gets 4 to 7 points."),
+      h("p", {}, "Not sure? Tap ", h("b", { text: "What happened?" }), ", answer two questions, and the app tells you."),
+    ],
+  ],
+  ["Games and matches", () => [h("p", {}, "Snooker players call one game a ", h("b", { text: "frame" }), ". Play as many as you like: the app counts ", h("b", { text: "games won" }), " and you take turns to break."), h("p", {}, "The app tells you what to do at every step. You just tap what happened.")]],
+];
+
+function learnSheet(i = 0) {
+  const [title, body] = LESSONS[i];
+  const last = i === LESSONS.length - 1;
+  openSheet(
+    "How snooker works",
+    h("div", { class: "lesson" }, h("h3", { text: `${i + 1}. ${title}` }), ...body()),
+    h("div", { class: "lesson-dots", "aria-hidden": "true" }, LESSONS.map((_, j) => h("i", { class: j === i ? "now" : "" }))),
+    h(
+      "div",
+      { class: "row" },
+      i ? btn("Back", () => learnSheet(i - 1), "btn") : null,
+      btn(last ? "Got it" : "Next", () => {
+        if (!last) return learnSheet(i + 1);
+        closeSheet();
+        if (match && !$("#view-game").hidden) render();
+      }, "btn primary")
+    )
+  );
+}
+
+/** One quick answer on its own, e.g. "what's a frame?" from the header. */
+function answerSheet(id) {
+  const e = byId(id);
+  openSheet(e.q, h("div", { class: "qa-solo" }, rich(e.a(context(match ? state() : null, names())))));
+}
+
+function setTheme(light) {
+  try {
+    if (light) localStorage.setItem("snooker.theme", "light");
+    else localStorage.removeItem("snooker.theme");
+  } catch {}
+  if (light) document.documentElement.dataset.theme = "light";
+  else delete document.documentElement.dataset.theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", light ? "#f6f5f1" : "#131a17");
 }
 
 function renderTag(s = state()) {
   if (!match) return;
   const tag = $("#frame-tag");
-  tag.replaceChildren("Frame ", h("b", { text: String(frameNo()) }), ` · ${match.reds} reds`);
+  tag.replaceChildren(h("button", { type: "button", class: "frame-help", on: { click: () => answerSheet("what-frame") } }, "Game ", h("b", { text: String(frameNo()) })), ` · ${match.reds} reds`);
   if (mode === "online") {
     tag.append(" · ", h("span", { class: "live", text: online.down ? "reconnecting…" : online.seat === null ? "watching live" : "live" }));
   }
@@ -548,7 +707,7 @@ function renderPlayers(s) {
       h("div", { class: "p-score", text: String(s.scores[p]) }),
       h("div", { class: "p-sub" }, ...(s.turn === p && s.brk > 0 && !s.over ? ["Break ", h("b", { text: String(s.brk) })] : s.best[p] ? [`Best break ${s.best[p]}`] : []))
     );
-  $("#players").replaceChildren(card(0), h("div", { class: "frames" }, h("b", { text: `${won[0]}–${won[1]}` }), h("small", { text: "FRAMES" })), card(1));
+  $("#players").replaceChildren(card(0), h("div", { class: "frames" }, h("b", { text: `${won[0]}–${won[1]}` }), h("small", { text: "GAMES WON" })), card(1));
 }
 
 function renderStanding(s) {
@@ -578,10 +737,10 @@ function renderGuide(s) {
       h(
         "div",
         { class: "g-card", "data-key": `over-${frameNo()}` },
-        h("p", { class: "g-kicker", text: s.conceded !== null ? `${n[s.conceded]} conceded` : "Frame over" }),
-        h("p", { class: "g-title", text: `${n[w]} wins ${Math.max(...s.scores)}–${Math.min(...s.scores)}` }),
-        h("p", { class: "g-text", text: `Highest breaks: ${n[0]} ${s.best[0]}, ${n[1]} ${s.best[1]}.` }),
-        can("next", s) ? h("div", { class: "row" }, btn(`Next frame · ${n[1 - match.frames[frameNo() - 1].breaker]} breaks`, () => dispatch({ t: "next" }), "btn primary")) : null
+        h("p", { class: "g-kicker", text: s.conceded !== null ? `${n[s.conceded]} gave up this game` : `Game ${frameNo()} over` }),
+        h("p", { class: "g-title", text: `${n[w]} wins, ${Math.max(...s.scores)}–${Math.min(...s.scores)}` }),
+        h("p", { class: "g-text", text: `Highest breaks: ${n[0]} ${s.best[0]}, ${n[1]} ${s.best[1]}. (Snooker players call one game a "frame".)` }),
+        can("next", s) ? h("div", { class: "row" }, btn(`Play game ${frameNo() + 1} · ${n[1 - match.frames[frameNo() - 1].breaker]} breaks`, () => dispatch({ t: "next" }), "btn primary")) : null
       )
     );
   }
@@ -643,7 +802,7 @@ function renderGuide(s) {
 
   const ask = mode === "online" && match.frames[match.frames.length - 1].ask;
   if (ask) {
-    const what = ask.all ? "start the whole game over (every frame back to 0)" : "restart this frame (scores back to 0)";
+    const what = ask.all ? "start the whole match over (every game back to 0)" : "restart this game (scores back to 0)";
     const mineAsk = ask.by === online.seat;
     alerts.unshift(
       h(
@@ -660,7 +819,7 @@ function renderGuide(s) {
     );
   }
 
-  const spot = spotCard(s);
+  const spot = mode === "online" && !can("turn", s) ? spotCard(s) : null; // the phone at the table gets the pop-up
   if (spot) alerts.push(spot);
 
   if (!s.over && !s.toss) {
@@ -739,7 +898,7 @@ function spotCard(s) {
   const at = all ? ball : order[ui.spotFall];
   const later = s.toSpot.slice(ui.spotStep + 1);
   let text;
-  if (all) text = `Every spot is covered: place it as close to its own spot as you can, towards the top cushion${ball === "pink" || ball === "black" ? " (if that's blocked, straight below its spot)" : ""}, not touching another ball.`;
+  if (all) text = `Every spot is covered: place it as close to its own spot as you can, towards the far cushion${ball === "pink" || ball === "black" ? " (if that's blocked, straight below its spot)" : ""}, not touching another ball.`;
   else if (at === ball) text = `On its own spot: ${SPOT_WORDS[ball]}.`;
   else text = `Its spot is covered, so it goes on the highest free spot: the ${at} spot (${SPOT_WORDS[at]}).`;
   return h(
@@ -821,7 +980,7 @@ function renderActions(s) {
   $("#btn-foul").disabled = !turn;
   $("#btn-undo").disabled = !can("undo", s);
   const last = eventsNow()[eventsNow().length - 1];
-  $("#undo-sub").textContent = !last ? (match.frames.length > 1 ? "new frame" : "last tap") : last.t === "pot" ? `the ${last.ball}` : last.t === "call" ? `${last.ball} call` : { miss: "the miss", foul: "the foul", again: "play again", replace: "put back", free: "free ball", toss: "the toss", concede: "concede" }[last.t] || "last tap";
+  $("#undo-sub").textContent = !last ? (match.frames.length > 1 ? "new game" : "last tap") : last.t === "pot" ? `the ${last.ball}` : last.t === "call" ? `${last.ball} call` : { miss: "the miss", foul: "the foul", again: "play again", replace: "put back", free: "free ball", toss: "the toss", concede: "concede" }[last.t] || "last tap";
 }
 
 function renderLog(s) {
@@ -874,22 +1033,29 @@ function renderLog(s) {
 /* ------------------------------------------------------------------ */
 
 let lastFocus = null;
+/** A bottom sheet. A "locked" one is a step you must finish (set up the table, put a colour back): no ✕, no tap-outside. */
 function openSheet(title, ...body) {
-  lastFocus = document.activeElement;
-  const head = h("div", { class: "sheet-head" }, h("h2", { id: "sheet-title", text: title }), btn("✕", closeSheet, "icon-btn close", { "aria-label": "Close" }));
+  const opts = body[0] && body[0].locked !== undefined && !(body[0] instanceof Node) ? body.shift() : {};
+  if ($("#sheet").hidden) lastFocus = document.activeElement;
+  ui.sheetLocked = !!opts.locked;
+  ui.sheetKind = opts.kind || null;
+  const head = h("div", { class: "sheet-head" }, h("h2", { id: "sheet-title", text: title }), opts.locked ? null : btn("✕", closeSheet, "icon-btn close", { "aria-label": "Close" }));
   $("#sheet-body").replaceChildren(head, ...body);
   $("#sheet").hidden = false;
   $("#scrim").hidden = false;
   $("#sheet-body").scrollTop = 0;
-  head.querySelector("button").focus({ preventScroll: true });
+  ($("#sheet-body").querySelector("button") || head).focus?.({ preventScroll: true });
 }
 function closeSheet() {
+  ui.sheetLocked = false;
+  ui.sheetKind = null;
   $("#sheet").hidden = true;
   $("#scrim").hidden = true;
   lastFocus?.focus?.({ preventScroll: true });
 }
-$("#scrim").addEventListener("click", closeSheet);
-document.addEventListener("keydown", (e) => e.key === "Escape" && !$("#sheet").hidden && closeSheet());
+const softClose = () => !ui.sheetLocked && closeSheet();
+$("#scrim").addEventListener("click", softClose);
+document.addEventListener("keydown", (e) => e.key === "Escape" && !$("#sheet").hidden && softClose());
 
 function freeBallSheet() {
   const s = state();
@@ -1079,7 +1245,7 @@ function menuSheet() {
   if (!s.over && (mode === "local" || can("concede", s))) {
     if (mode === "local")
       items.push(
-        h("h3", { text: "Concede this frame" }),
+        h("h3", { text: "Give up this game (concede)" }),
         h(
           "div",
           { class: "row" },
@@ -1093,7 +1259,7 @@ function menuSheet() {
       );
     else
       items.push(
-        btn("Concede this frame", () => {
+        btn("Give up this game (concede)", () => {
           closeSheet();
           dispatch({ t: "concede", who: online.seat });
         })
@@ -1103,22 +1269,24 @@ function menuSheet() {
   items.push(h("h3", { text: "Restart or reset" }));
   if (mode === "local") {
     items.push(
-      btn("Restart this frame", () =>
-        confirmSheet("Restart this frame?", "Both scores for this frame go back to 0 and it starts again from the break. Earlier frames are kept.", "Restart frame", () => {
+      btn("Restart this game", () =>
+        confirmSheet("Restart this game?", "Both scores for this game go back to 0 and it starts again from the break. Earlier games are kept.", "Restart game", () => {
           eventsNow().length = 0;
+          ui.setupDone.clear(); // the balls need setting up again
           saveLocal();
           render();
         })
       ),
-      btn("Reset the whole game", () =>
-        confirmSheet("Reset the whole game?", "Every frame is cleared and the frame count goes back to 0–0. Same players, same reds.", "Reset game", () => {
+      btn("Start the match over", () =>
+        confirmSheet("Start the match over?", "Every game is cleared and games won go back to 0–0. Same players, same reds.", "Start over", () => {
           match = { ...match, frames: [{ breaker: match.frames[0].breaker, events: [] }] };
+          ui.setupDone.clear();
           saveLocal();
           render();
         })
       ),
-      btn("Delete this game", () =>
-        confirmSheet("Delete this game?", "Every frame and score on this phone goes, and you're back at the start.", "Delete game", () => {
+      btn("Delete this match", () =>
+        confirmSheet("Delete this match?", "Every game and score on this phone goes, and you're back at the start.", "Delete", () => {
           deleteLocal();
           goHome();
         }), "btn warn")
@@ -1126,12 +1294,12 @@ function menuSheet() {
   } else if (online.seat !== null && other) {
     items.push(
       h("p", { class: "note", text: `Restarting wipes ${other}'s score too, so ${other} has to agree on their phone.` }),
-      btn(`Restart this frame (asks ${other})`, () => {
+      btn(`Restart this game (asks ${other})`, () => {
         closeSheet();
         dispatch({ t: "restart" });
         toast(`Asked ${other} to agree`);
       }),
-      btn(`Start the whole game over (asks ${other})`, () => {
+      btn(`Start the match over (asks ${other})`, () => {
         closeSheet();
         dispatch({ t: "restart", all: true });
         toast(`Asked ${other} to agree`);
@@ -1139,9 +1307,15 @@ function menuSheet() {
     );
   }
   items.push(
-    btn("Where the balls go", () => pictureSheet("Setting up", "Standing at the baulk end: green left, brown middle, yellow right. Blue in the middle, pink below the reds, black at the top.", { rack: match.reds }))
+    btn("Where the balls go at the start", () => openSheet("Setting up the table", h("div", { class: "table-wrap", html: setupSVG(match.reds) }), h("p", { class: "lead-text", text: "From the end with the D: green left, brown middle, yellow right. Blue in the middle of the table, pink halfway to the far end with the reds packed behind it, black near the far cushion. White anywhere in the D." })))
   );
+  items.push(btn("How snooker works (1 minute)", () => learnSheet(0)));
   items.push(btn("Rules & quick answers", () => askSheet()));
+  const light = document.documentElement.dataset.theme === "light";
+  items.push(btn(light ? "Switch to dark theme" : "Switch to light theme", () => {
+    setTheme(!light);
+    closeSheet();
+  }));
   if (installWay()) items.push(btn(installPlace === "home" ? "Add to home screen" : "Install the app", installSheet));
   if (mode === "local")
     items.push(
@@ -1350,6 +1524,7 @@ document.addEventListener("click", (e) => {
   if (open.dataset.open === "ask") askSheet();
   if (open.dataset.open === "menu") menuSheet();
   if (open.dataset.open === "install") installSheet();
+  if (open.dataset.open === "learn") learnSheet(0);
 });
 
 function boot() {

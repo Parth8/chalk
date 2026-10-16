@@ -231,17 +231,17 @@ async function act(env, id, body) {
     delete frame.ask;
   } else if (e.t === "undo") {
     const last = frame.events[frame.events.length - 1];
-    if (!last) throw new ApiError(409, "nothing", "Nothing to undo in this frame.");
+    if (!last) throw new ApiError(409, "nothing", "Nothing to undo in this game.");
     if (last.by !== seat) throw new ApiError(403, "not_yours", "You can only undo your own move.");
     frame.events.pop();
   } else if (e.t === "next") {
-    if (!s.over) throw new ApiError(409, "not_over", "This frame isn't over yet.");
-    if (frames.length >= LIMITS.frames) throw new ApiError(409, "too_many", "That's a lot of frames. Start a new game.");
+    if (!s.over) throw new ApiError(409, "not_over", "This game isn't over yet.");
+    if (frames.length >= LIMITS.frames) throw new ApiError(409, "too_many", "That's a lot of games. Start a new match.");
     frames.push({ breaker: 1 - frame.breaker, events: [] });
   } else {
     if (e.t === "concede") e.who = seat;
     else if (e.t !== "toss" && s.turn !== seat) throw new ApiError(403, "not_your_turn", "It's the other side's turn.");
-    if (frame.events.length >= LIMITS.events) throw new ApiError(409, "too_many", "That frame is too long to keep.");
+    if (frame.events.length >= LIMITS.events) throw new ApiError(409, "too_many", "That game is too long to keep.");
     try {
       apply(s, e);
     } catch {

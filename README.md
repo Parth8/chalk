@@ -1,8 +1,8 @@
 # Snooker
 
-**Tap the ball you potted. The app keeps the score, the order and the rules.**
+**Never played snooker? Tap what happens; the app keeps the score, the order and the rules.**
 
-A light scoreboard for friendly snooker. Tap a ball when it drops and it's added to the shared list of potted balls. The app tells you what's on next, works out fouls, shows where to put a colour back, and answers "what if…?" questions at the table. You can share a link so each side scores from their own phone, or keep score for both players on one phone.
+A light scoreboard for friendly snooker, made for people who've never played and find the game intimidating. Tap a ball when it drops and it's added to the shared list of potted balls. The app tells you what's on next, works out fouls, shows where to put a colour back, and answers "what if…?" questions at the table. You can share a link so each side scores from their own phone, or keep score for both players on one phone.
 
 No ads, no sign-ups, no build step.
 
@@ -11,6 +11,12 @@ No ads, no sign-ups, no build step.
 ---
 
 ## What it does
+
+- **Learn in a minute.** "New to snooker?" on the home screen (and in the menu) walks through the idea, the ball values, turns, the order, fouls, and what a game is, one short card at a time.
+- **Set up the table.** Before the first shot of every game, a pop-up shows the table with every ball labelled ("Black 7", "15 reds in a triangle", "White: anywhere in the D") and seven plain steps. Play only starts once you tap **The table is ready**.
+- **Put a colour back.** When a colour has to come back out, a pop-up shows exactly where on the table, says why it comes back, and stays until you tap that it's on its spot. If the spot is covered, **Its spot is covered** steps through the next free spot by the rules. In a shared game, only the phone at the table gets the pop-up; the other just sees a note.
+- **Games, not frames.** The app says "Game 1", "Games won" and "Play game 2". Tap "Game 1" at the top for what snooker players mean by a frame.
+- **Dark green-grey theme** by default, easy on the eyes in a dim club; a light theme is in the menu.
 
 - **Tap to score, the way you play:**
   - **Red went in:** tap Red.
@@ -24,11 +30,11 @@ No ads, no sign-ups, no build step.
 - **Put it back here.** When a colour has to be re-spotted, a small top-down table shows its spot. If the spot is covered, tap **Spot covered?** to step through the next free spot by the rules (black, pink, blue, brown, green, yellow), and finally the "as close as you can, towards the top cushion" fallback.
 - **White in hand** after an in-off or the white leaving the table: the D is drawn right next to what's on, and the foul sheet offers "played from outside the D". **Re-spotted black** when the scores are level after the last black, with the coin toss.
 - **Live standing:** lead, points left on the table, and "needs snookers".
-- **Breaks and frames:** current break, best break, frames won, next frame alternates the break.
+- **Breaks and games:** current break, best break, games won; the next game alternates who breaks.
 - **15, 10 or 6 reds**, for full-size and smaller tables.
 - **Quick answers.** Over 70 questions players actually ask, worded for your game (names and real points). Type in plain words ("what if I pot the cue ball", "can I pot my colour off a red", "scratch", "spot is taken") or browse. The top of the list changes with the situation: on a colour you see calling questions, after a foul you see free ball and play-again questions.
 - **Undo** any tap, one step at a time.
-- **Restart, reset or delete** from the **⋯** menu: restart this frame, reset the whole game, or delete it. Home also has a ✕ to delete a saved game. In a shared game, restarting wipes both scores, so the other side gets a request and has to agree.
+- **Restart, reset or delete** from the **⋯** menu: restart this game, start the match over, or delete the match. Home also has a ✕ to delete a saved game. In a shared game, restarting wipes both scores, so the other side gets a request and has to agree.
 - **Shared games** (below) or **one phone** for both players. One-phone games are saved on the phone and work offline.
 - **Add to home screen.** Opens full-screen like an app, keeps the screen awake while you play, and works offline after the first visit. The same add-to-home-screen guide as Track and Shelfie, with picture steps on iPhone, iPad and Mac.
 

@@ -11,9 +11,9 @@
 
   <title>Snooker scorer</title>
   <meta name="description" content="Tap the ball you potted. Scores, breaks, fouls, where to re-spot each colour and quick rule answers. Share a link and both phones stay in step.">
-  <meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#101412" media="(prefers-color-scheme: dark)">
-  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#131a17">
+  <meta name="color-scheme" content="dark light">
+  <script src="js/theme.js"></script>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 
   <!-- Add to home screen: opens full-screen, like an app -->
@@ -33,8 +33,13 @@
       <header class="home-head">
         <span class="logo" aria-hidden="true"></span>
         <h1>Snooker</h1>
-        <p class="lede">Tap the ball you pot. We keep the score, the order and the rules.</p>
+        <p class="lede">Never played? No problem. Tap what happens and the app keeps the score, the order and the rules.</p>
       </header>
+
+      <button type="button" class="card learn" data-open="learn">
+        <span class="learn-title">New to snooker?</span>
+        <span class="note">How it works in 1 minute: the balls, the order, what a foul is. The app guides you at every shot.</span>
+      </button>
 
       <div class="card resume" id="resume" hidden></div>
 

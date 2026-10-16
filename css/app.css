@@ -1,7 +1,39 @@
 /* Snooker scorer: one stylesheet. Tokens first, then layout, then components.
-   Light and dark follow the device. */
+   Dark green-grey by default (easy on the eyes in a dim club); light is an option in the menu. */
 
 :root {
+  --bg: #131a17;
+  --card: #1c2520;
+  --ink: #eef2ef;
+  --ink-soft: #a6b0aa;
+  --muted: #7f8984;
+  --hair: rgba(255, 255, 255, 0.1);
+  --press: rgba(255, 255, 255, 0.07);
+  --accent: #38b77b;
+  --accent-ink: #06150d;
+  --accent-tint: #1a3a2b;
+  --warn: #f2914f;
+  --warn-tint: #3d2518;
+  --felt: #1b6b43;
+  --felt-line: rgba(255, 255, 255, 0.55);
+  --rail: #5a3a22;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.18);
+  --radius: 18px;
+  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --num: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --red: #d0142f;
+  --yellow: #f3c227;
+  --green: #17894b;
+  --brown: #7b4a24;
+  --blue: #1f5fc6;
+  --pink: #f28cb7;
+  --black: #08090a;
+  --white: #f7f5ee;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
   --bg: #f6f5f1;
   --card: #ffffff;
   --ink: #141816;
@@ -15,43 +47,10 @@
   --warn: #c2410c;
   --warn-tint: #fdeee4;
   --felt: #1d7a4f;
-  --felt-line: rgba(255, 255, 255, 0.55);
-  --rail: #5a3a22;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.06);
-  --radius: 18px;
-  --font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --num: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-
   --red: #c8102e;
-  --yellow: #f3c227;
-  --green: #17894b;
-  --brown: #7b4a24;
-  --blue: #1f5fc6;
-  --pink: #f28cb7;
   --black: #16181a;
-  --white: #f7f5ee;
   color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1311;
-    --card: #19201c;
-    --ink: #eef2ef;
-    --ink-soft: #a3aca7;
-    --muted: #7d8681;
-    --hair: rgba(255, 255, 255, 0.09);
-    --press: rgba(255, 255, 255, 0.06);
-    --accent: #34b377;
-    --accent-ink: #06150d;
-    --accent-tint: #173326;
-    --warn: #f08a4b;
-    --warn-tint: #3a2216;
-    --felt: #19663f;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --black: #050607;
-    color-scheme: dark;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -292,9 +291,7 @@ main {
 [data-ball="pink"] { --c: var(--pink); }
 [data-ball="black"] { --c: var(--black); }
 [data-ball="white"] { --c: var(--white); }
-@media (prefers-color-scheme: dark) {
-  [data-ball="black"] { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.22); }
-}
+:root:not([data-theme="light"]) [data-ball="black"] { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.22); }
 
 .pad { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 8px; padding: 4px 2px; }
 .pad .ball {
@@ -386,7 +383,7 @@ svg.table .pocket { fill: #0b0d0c; }
 svg.table .line { fill: none; stroke: var(--felt-line); stroke-width: 10; }
 svg.table .d-hot { fill: rgba(255, 255, 255, 0.22); stroke: #fff; stroke-width: 16; }
 svg.table .spot { fill: rgba(255, 255, 255, 0.7); }
-svg.table .lbl { fill: rgba(255, 255, 255, 0.7); font: 700 72px var(--font); }
+svg.table .lbl { fill: rgba(255, 255, 255, 0.85); font: 700 78px var(--font); }
 svg.table .end { fill: rgba(255, 255, 255, 0.7); font: 800 58px var(--font); letter-spacing: 4px; }
 svg.table .ring { fill: none; stroke: #fff; stroke-width: 14; animation: ring 1.5s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes ring { 0% { transform: scale(0.6); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
@@ -588,3 +585,32 @@ svg.table .b-white { fill: #fbfaf5; }
 .resume-row > .btn { flex: 1; align-items: flex-start; }
 .resume-row > .icon-btn { flex: none; font-size: 15px; color: var(--ink-soft); }
 .pad .red.extra { height: 44px; border-radius: 22px; opacity: 0.85; font-size: 14px; }
+
+/* ---------------- setting up, beginner guide ---------------- */
+
+svg.table.setup { width: 100%; max-width: 360px; margin: 0 auto; }
+svg.table .tag-lbl { fill: var(--ink); font: 700 82px var(--font); }
+svg.table .end.big { fill: var(--ink-soft); font-size: 70px; }
+.steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; counter-reset: s; }
+.steps li { counter-increment: s; display: flex; gap: 10px; align-items: flex-start; font-size: 15px; }
+.steps li::before { content: counter(s); flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent-tint); color: var(--accent); font-weight: 800; font-size: 14px; display: grid; place-items: center; }
+.steps .dot { width: 16px; height: 16px; vertical-align: -3px; margin: 0 2px; }
+.learn { display: flex; flex-direction: column; gap: 4px; text-align: left; align-items: stretch; }
+.lesson { display: flex; flex-direction: column; gap: 10px; }
+.lesson h3 { margin: 0; font-size: 19px; color: var(--ink); }
+.lesson p { margin: 0; font-size: 15.5px; color: var(--ink-soft); }
+.lesson p b { color: var(--ink); }
+.lesson .balls-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.lesson .balls-row span.v { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; font-size: 14px; }
+.lesson .balls-row .dot { width: 24px; height: 24px; }
+.lesson-dots { display: flex; justify-content: center; gap: 6px; }
+.lesson-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--hair); }
+.lesson-dots i.now { background: var(--accent); width: 18px; border-radius: 4px; }
+.spot-pop { display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+.spot-pop .table-wrap svg.table { width: min(200px, 52vw); }
+.frame-help { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline dotted; text-underline-offset: 3px; }
+.card.learn { border: 0; color: inherit; font: inherit; cursor: pointer; background: linear-gradient(135deg, var(--accent-tint), var(--card)); }
+.learn-title { font-size: 18px; font-weight: 750; }
+.qa-solo { display: flex; flex-direction: column; gap: 8px; font-size: 15px; color: var(--ink-soft); }
+.qa-solo p { margin: 0; }
+.qa-solo b { color: var(--ink); }
