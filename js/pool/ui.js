@@ -120,7 +120,8 @@ function onCard(s) {
   const card = h("div", { class: "g-card", style: "--on: var(--accent)" }, h("p", { class: "g-kicker", text: kicker }), h("p", { class: "g-title", text: title }), h("p", { class: "g-text", text }), extra);
   if (isShared() && !can("turn", s)) card.append(h("p", { class: "g-text", text: session.seat === null ? `${me}'s phone logs this visit.` : `${me} logs this visit on their phone. You'll see it here live.` }));
   if (!s.inHand) return card;
-  card.append(h("p", { class: "g-text" }, h("b", { text: "Ball in hand: " }), s.inHand === "kitchen" ? "put the white anywhere behind the line at your end." : "put the white anywhere on the table."));
+  // (on the break, the words above already say where the white goes)
+  if (!s.breakShot) card.append(h("p", { class: "g-text" }, h("b", { text: "Ball in hand: " }), s.inHand === "kitchen" ? "put the white anywhere behind the line at your end." : "put the white anywhere on the table."));
   card.classList.add("in-hand");
   return cardWithPicture(card, poolSVG({ labels: false, [s.inHand === "kitchen" ? "kitchen" : "anywhere"]: true }));
 }

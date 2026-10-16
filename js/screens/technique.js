@@ -18,10 +18,11 @@ const STANCE = art(
      <path d="M88 64 L40 70"/>
      <path d="M40 70 L28 138"/><path d="M40 70 L58 104 L52 138"/>
      <path d="M80 66 L118 94"/>
-     <path d="M52 68 L46 58 L42 62"/>
+     <path d="M84 63 L68 42 L62 62"/>
    </g>
+   <ellipse cx="62" cy="64" rx="5" ry="4" fill="${SKIN}"/>
    <path d="M118 94 h12" stroke="${SKIN}" stroke-width="6" stroke-linecap="round"/>
-   <text x="120" y="24" class="tech-note">chin low, over the cue</text>`,
+   <text x="232" y="24" text-anchor="end" class="tech-note">chin low, over the cue</text>`,
   "A player bent over the table, chin low over the cue, back leg straight"
 );
 
@@ -60,7 +61,7 @@ const AIM = art(
    <line x1="222" y1="18" x2="128" y2="88" stroke="#fff" stroke-width="2" stroke-dasharray="5 5" opacity="0.7"/>
    <circle cx="150" cy="72" r="11" fill="#d0142f"/>
    <circle cx="132" cy="85" r="11" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4 3"/>
-   <line x1="30" y1="122" x2="128" y2="88" stroke="#fff" stroke-width="2"/>
+   <line x1="30" y1="122" x2="132" y2="85" stroke="#fff" stroke-width="2"/>
    <circle cx="30" cy="122" r="11" fill="#f4f1e8"/>
    <text x="16" y="34" class="tech-note light">aim the white at the</text>
    <text x="16" y="52" class="tech-note light">dotted "ghost" ball</text>`,

@@ -35,7 +35,7 @@ async function game(env, reds = 15) {
 
 test("the Worker carries an exact copy of the rules engine", () => {
   const src = readFileSync(new URL("../worker/worker.js", import.meta.url), "utf8");
-  assert.equal(src, workerWithEngine(src), "run `npm run worker` to copy js/engine.js into the Worker");
+  assert.equal(src, workerWithEngine(src), "run `npm run worker` to copy the engines into the Worker");
 });
 
 test("no invisible characters hide in the source (they vanish when pasted into the dashboard)", () => {

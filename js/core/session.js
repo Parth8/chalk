@@ -25,8 +25,12 @@ export const frameNo = () => session.match.frames.length;
 export const eventsNow = () => session.match.frames[session.match.frames.length - 1].events;
 /** Changes whenever a move is made or taken back: keys pop-ups to the moment they belong to. */
 export const evKey = () => `${frameNo()}:${eventsNow().length}`;
-/** Changes with each new game and each restart: keys "set up the table" to the game it's for. */
-export const gameKey = () => `${session.mode}:${session.id || ""}:${frameNo()}:${session.match.frames[frameNo() - 1].restarts || 0}`;
+/**
+ * Changes with each new game and each restart: keys "set up the table" to the game it's for.
+ * A match on this phone counts as new each time it's opened (a new match, or carrying on later).
+ */
+let opened = 0;
+export const gameKey = () => `${session.mode}:${session.id || opened}:${frameNo()}:${session.match.frames[frameNo() - 1].restarts || 0}`;
 export const isShared = () => session.mode === "online";
 
 /**
@@ -73,6 +77,7 @@ export function act(e) {
 /* ---------------- this phone ---------------- */
 
 export function openLocal(m) {
+  opened++;
   Object.assign(session, { mode: "local", id: null, match: m, seat: null, ready: true, send: null });
   saveLocal();
   changed();

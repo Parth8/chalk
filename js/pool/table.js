@@ -1,5 +1,5 @@
 // A top-down pool table, drawn upright with the break end (the "head") at the bottom, like the
-// snooker table in table.js. Proportions of a 9-foot table (100 × 50 inch playing surface, in mm).
+// snooker table in js/snooker/table.js. Proportions of a 9-foot table (100 × 50 inch playing surface, in mm).
 // Static, trusted SVG only: no user text ever goes in here.
 
 import { colourOf } from "./engine.js";

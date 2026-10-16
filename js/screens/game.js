@@ -197,7 +197,8 @@ function gates(ui, s) {
 /** The first game of each kind on this phone: point out the parts of the screen, once. */
 function maybeTour(ui, s) {
   const toured = store.read(store.KEYS.toured, {});
-  if (toured[ui.id] || touring() || isOpen() || eventsNow().length || frameNo() > 1 || s.over || !can("turn", s)) return;
+  const playing = isShared() ? session.ready && session.seat !== null : true; // not for someone just watching
+  if (toured[ui.id] || touring() || isOpen() || eventsNow().length || frameNo() > 1 || s.over || !playing) return;
   store.write(store.KEYS.toured, { ...toured, [ui.id]: true });
   startTour(tourSteps(ui));
 }

@@ -261,7 +261,8 @@ main {
 .g-text { margin: 0; font-size: 14px; color: var(--ink-soft); }
 .g-text b { color: var(--ink); }
 .g-card.foul { border-left-color: var(--warn); }
-.g-card.spot { flex-direction: row; gap: 14px; align-items: center; }
+.g-card.spot { flex-direction: row; flex-wrap: wrap; gap: 14px; align-items: center; }
+.g-card.spot > .row { flex-basis: 100%; } /* buttons go under the words and the picture */
 .g-card.spot .spot-copy { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .g-card.spot svg.table { width: 96px; flex: none; }
 .g-card.spot .row > .btn { min-width: 0; }
@@ -558,8 +559,9 @@ svg.table .end.big { fill: var(--ink-soft); font-size: 70px; }
 .side-fields { display: flex; flex-direction: column; gap: 12px; }
 .team { border: 1.5px solid var(--hair); border-radius: 14px; padding: 10px 12px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .team legend { font-size: 13px; font-weight: 750; color: var(--ink-soft); padding: 0 4px; }
-.team .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.team .pair .field input { min-width: 0; }
+.team .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.team .pair .field { min-width: 0; }
+.team .pair .field input { width: 100%; min-width: 0; }
 
 /* ---------------- game: doubles, the end of a match, sync ---------------- */
 

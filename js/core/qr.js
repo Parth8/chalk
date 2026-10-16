@@ -1,7 +1,8 @@
 // A QR code for a shared game's link, so the other player can scan it instead of being sent it.
-// Encoding by qrcode-generator (MIT, vendored unmodified in /vendor); drawn here as one SVG path.
+// Encoding by qrcode-generator (MIT), vendored unmodified in /vendor (its qrcode.mjs saved as .js, which
+// every web host serves as JavaScript). Drawn here as one SVG path.
 
-import qrcode from "../../vendor/qrcode-generator/qrcode.mjs";
+import qrcode from "../../vendor/qrcode-generator/qrcode.js";
 
 /** The dark modules of a QR code for some text, as rows of booleans. */
 export function qrMatrix(text) {

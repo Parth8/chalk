@@ -154,8 +154,8 @@ function renderSides() {
           "fieldset",
           { class: "team" },
           h("legend", { text: `Team ${t + 1}` }),
-          input(`t${t}`, "Team name (optional)", last.teamNames[t], `e.g. The Pinks`),
-          h("div", { class: "pair" }, input(`t${t}a`, "Player", last.teams[t]?.[0], t ? "Player C" : "Player A"), input(`t${t}b`, "Player", last.teams[t]?.[1], t ? "Player D" : "Player B"))
+          input(`t${t}`, "Team name (optional)", last.teamNames[t], t ? "e.g. The Blues" : "e.g. The Pinks"),
+          h("div", { class: "pair" }, input(`t${t}a`, "Player", last.teams[t]?.[0], t ? "Player C" : "Player A"), input(`t${t}b`, "Partner", last.teams[t]?.[1], t ? "Player D" : "Player B"))
         )
       )
     );

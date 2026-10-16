@@ -62,23 +62,27 @@ function guide(s) {
         )
       ),
     ];
-    const card = h(
-      "div",
-      { class: "g-card", style: "--on: var(--black)", "data-key": `toss-${evKey()}` },
-      h("p", { class: "g-kicker", text: `Level at ${s.scores[0]}` }),
-      h("p", { class: "g-title", text: "Re-spotted black" }),
-      h("p", { class: "g-text", text: "Black back on its spot. Toss a coin: the winner picks who plays, with the white in hand in the D. Next score or foul wins." }),
-      can("toss", s)
-        ? h(
-            "div",
-            { class: "row" },
-            btn("Toss a coin", () => tossSheet({ title: "Who plays the black?", intro: "The winner of the toss chooses who plays first.", names: n, after: choose }), "btn primary"),
-            btn(`${n[0]} plays`, () => act({ t: "toss", who: 0 })),
-            btn(`${n[1]} plays`, () => act({ t: "toss", who: 1 }))
-          )
-        : null
+    const card = cardWithPicture(
+      h(
+        "div",
+        { class: "g-card", style: "--on: var(--black)", "data-key": `toss-${evKey()}` },
+        h("p", { class: "g-kicker", text: `Level at ${s.scores[0]}` }),
+        h("p", { class: "g-title", text: "Re-spotted black" }),
+        h("p", { class: "g-text", text: "Black back on its spot. Toss a coin: the winner picks who plays, with the white in hand in the D. Next score or foul wins." })
+      ),
+      tableSVG({ spot: "black", d: true, labels: false })
     );
-    cards.push(cardWithPicture(card, tableSVG({ spot: "black", d: true, labels: false })));
+    if (can("toss", s))
+      card.append(
+        h(
+          "div",
+          { class: "row" },
+          btn("Toss a coin", () => tossSheet({ title: "Who plays the black?", intro: "The winner of the toss chooses who plays first.", names: n, after: choose }), "btn primary"),
+          btn(`${n[0]} plays`, () => act({ t: "toss", who: 0 })),
+          btn(`${n[1]} plays`, () => act({ t: "toss", who: 1 }))
+        )
+      );
+    cards.push(card);
   }
 
   if (s.foul && local.foulDone !== evKey()) alerts.push(foulCard(s, n));
@@ -549,7 +553,7 @@ export default {
     noMatch: "No match. Try words like white, foul, call, free ball, spot, order or miss.",
     picture: (show, m) => (show === "table" ? tableSVG({ rack: m ? m.reds : 15 }) : show === "d" ? tableSVG({ d: true }) : null),
   },
-  headerDetail: (m) => `${m.reds} reds`,
+  headerDetail: (m) => `${m.reds} red${m.reds === 1 ? "" : "s"}`,
   tour: {
     players: "Points for each side. The green outline shows who's at the table.",
     pad: "When a red goes in, tap Red. On a colour, tap it once to call it and again when it goes in.",

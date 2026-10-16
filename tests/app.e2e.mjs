@@ -19,7 +19,9 @@ const errors = [];
 
 async function phone() {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+  const net = { down: false }; // no signal: every request to the Worker fails
   await ctx.route(`${API}/**`, async (route) => {
+    if (net.down) return route.abort("internetdisconnected");
     const req = route.request();
     // like a real phone signal: moves take a while, and a later one can overtake an earlier one
     if (req.method() === "POST") await new Promise((r) => setTimeout(r, (posts++ % 2 ? 40 : 450)));
@@ -31,6 +33,10 @@ async function phone() {
     await route.fulfill({ status: res.status, headers: Object.fromEntries(res.headers), body: await res.text() });
   });
   const page = await ctx.newPage();
+  page.signal = async (on) => {
+    net.down = !on;
+    await ctx.setOffline(!on);
+  };
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && !/Failed to load resource/.test(m.text()) && errors.push(m.text()));
   return page;
@@ -271,6 +277,85 @@ try {
     assert.equal(await p.locator("#resume").isHidden(), true, "nothing left to carry on");
   });
 
+  await step("doubles, best of 3, and a coin toss for the break", async () => {
+    await p.click('#target-pick [data-target="2"]');
+    await p.click("#start-local");
+    await p.click('#side-pick [data-sides="2"]');
+    await p.fill("input[name=t0]", "Pinks");
+    await p.fill("input[name=t0a]", "Ann");
+    await p.fill("input[name=t0b]", "Bea");
+    await p.fill("input[name=t1a]", "Cal");
+    await p.fill("input[name=t1b]", "Dev");
+    assert.equal(await p.textContent('#break-pick [data-b="1"]'), "Cal & Dev", "no team name: the players' names");
+    await p.click('#break-pick [data-b="toss"]');
+    await p.click("#local-form button[type=submit]");
+    assert.match(await p.textContent("#sheet"), /Heads\s*Pinks/);
+    await p.click('#sheet button:has-text("Toss the coin")');
+    await p.waitForSelector("#sheet .toss-call");
+    assert.match(await p.textContent("#sheet .toss-call"), /^(Heads! Pinks|Tails! Cal & Dev) wins the toss\.$/);
+    await p.click('#sheet .toss-result button:has-text("Pinks breaks")'); // the winner's choice, or "instead"
+    await p.waitForSelector("#sheet >> text=set up the table");
+    assert.match(await p.textContent("#sheet"), /Ann breaks first/);
+    await tableReady(p);
+    assert.match(await p.textContent("#frame-tag"), /best of 3/);
+    assert.match(await p.textContent(".players .frames"), /0–0\s*FIRST TO 2/);
+    assert.match(await p.textContent("#standing"), /first to 2 games/);
+    assert.match(await p.textContent(".player.at"), /Ann to play/);
+    assert.match(await p.textContent("#guide"), /Ann · break-off/);
+    await p.click("#btn-miss");
+    assert.match(await p.textContent(".player.at"), /Cal to play/, "then the other team");
+    await p.click("#btn-miss");
+    assert.match(await p.textContent(".player.at"), /Bea to play/, "then Ann's partner");
+  });
+
+  await step("spoken prompts say who's up and what's on", async () => {
+    await p.evaluate(() => {
+      window.said = [];
+      speechSynthesis.speak = (u) => window.said.push(u.text);
+    });
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Spoken prompts")');
+    await p.click("#sheet .close");
+    await p.click("#btn-miss");
+    await p.click(".pad .red");
+    assert.deepEqual(await p.evaluate(() => window.said), ["Bea, pot a red.", "Dev, pot a red.", "Dev, call a colour."]);
+    assert.equal(await p.evaluate(() => JSON.parse(localStorage.getItem("chalk.sound")).voice), true);
+  });
+
+  await step("winning the match: no game after it, and a picture of the result to share", async () => {
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Cal & Dev gives up")');
+    assert.match(await p.textContent("#guide"), /Pinks wins/);
+    await p.click('#guide button:has-text("Play game 2 · Dev breaks")'); // a new game starts one player on
+    await tableReady(p);
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Cal & Dev gives up")');
+    assert.match(await p.textContent("#guide"), /Pinks wins the match, 2–0/);
+    assert.equal(await p.locator('#guide button:has-text("Play game")').count(), 0);
+    const [file] = await Promise.all([p.waitForEvent("download"), p.click('#guide button:has-text("Share the result")')]);
+    assert.equal(file.suggestedFilename(), "chalk-result.png");
+    await shot(p, "match-over");
+    await p.click('#guide button:has-text("Play another match")');
+    await tableReady(p);
+    assert.match(await p.textContent(".players .frames"), /0–0/);
+  });
+
+  await step("menu: a coin toss any time, and the cue technique basics", async () => {
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Toss a coin")');
+    await p.click('#sheet button:has-text("Toss the coin")');
+    await p.waitForSelector("#sheet .toss-call");
+    await p.click("#sheet .close");
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Holding and aiming the cue")');
+    assert.match(await p.textContent("#sheet"), /1\. Stand steady/);
+    assert.equal(await p.locator("#sheet svg.tech-art").count(), 1);
+    for (let i = 0; i < 6; i++) await p.click('#sheet button:has-text("Next")');
+    assert.match(await p.textContent("#sheet"), /7\. Can't reach\? Use the rest/);
+    await p.click('#sheet button:has-text("Got it")');
+    assert.equal(await p.locator("#sheet").isHidden(), true);
+  });
+
   /* ---------------- two phones ---------------- */
   const a = await phone();
   const b = await phone();
@@ -286,6 +371,7 @@ try {
     await a.click('#join-card button[type=submit]');
     await a.waitForSelector("text=Waiting for the other side");
     link = await a.textContent(".share-link");
+    assert.equal(await a.locator("#join-card svg.qr").count(), 1, "a QR code for the phone next to you");
     await shot(a, "lobby");
     assert.match(link, /\?g=[a-z2-9]{10}$/);
   });
@@ -333,6 +419,25 @@ try {
     await mine.click("#btn-miss");
     await theirs.waitForFunction(() => !document.querySelector(".pad .red").disabled, null, { timeout: 8000 });
     assert.equal(await mine.locator(".pad .red").isDisabled(), true);
+  });
+
+  await step("no signal: taps still show, wait on the phone, and go when it's back", async () => {
+    const [mine, theirs] = (await a.locator(".pad .red").isDisabled()) ? [b, a] : [a, b];
+    const me = mine === a ? 0 : 1;
+    const before = Number(await score(mine, me));
+    await mine.signal(false);
+    await mine.click(".pad .red");
+    assert.equal(await score(mine, me), String(before + 1), "shows at once");
+    await mine.waitForSelector("#frame-tag >> text=offline · 1 waiting to send", { timeout: 12000 });
+    await mine.click("#btn-miss");
+    await mine.waitForSelector("#frame-tag >> text=offline · 2 waiting to send", { timeout: 12000 });
+    assert.equal(await mine.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("chalk.outbox.")).length), 1, "kept on the phone, even through a reload");
+    assert.equal(await score(theirs, me), String(before), "the other phone hasn't had them yet");
+    await mine.signal(true);
+    await theirs.waitForFunction(([p, n]) => document.querySelectorAll(".player .p-score")[p].textContent === n, [me, String(before + 1)], { timeout: 20000 });
+    await theirs.waitForFunction(() => !document.querySelector(".pad .red").disabled, null, { timeout: 8000 });
+    await mine.waitForFunction(() => document.querySelector("#frame-tag .live").textContent === "live", null, { timeout: 8000 });
+    assert.equal(await mine.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("chalk.outbox.")).length), 0);
   });
 
   await step("restarting a shared frame needs the other side to agree", async () => {
@@ -457,11 +562,15 @@ try {
     await y.goto(plink);
     assert.match(await y.textContent("#join-card"), /8-ball pool/);
     await y.fill("#join-card input[name=name]", "Ben");
+    await y.click('#join-card summary:has-text("Playing doubles")');
+    await y.fill("#join-card input[name=partner]", "Bo");
     await y.click("#join-card button[type=submit]");
     await y.waitForSelector("#view-game:not([hidden])");
     await x.waitForSelector("#view-game:not([hidden])", { timeout: 8000 });
     await racked(x);
     await racked(y);
+    assert.match(await x.textContent("#players"), /Ben & Bo/);
+    assert.match(await x.textContent("#players"), /(Ben|Bo) to play|next: Ben/, "the other phone sees who's up in the pair");
     const xBreaks = (await x.locator(".player.at .p-name").textContent()).includes("Asha");
     const [brk, other] = xBreaks ? [x, y] : [y, x];
     assert.equal(await other.locator("#btn-miss").isDisabled(), true);

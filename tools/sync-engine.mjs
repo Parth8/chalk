@@ -1,4 +1,4 @@
-// Copies the rules engines (js/engine.js for snooker, js/pool.js for 8-ball) into worker/worker.js,
+// Copies the rules engines (js/snooker/engine.js and js/pool/engine.js) into worker/worker.js,
 // so the Worker checks every move with exactly the rules the page uses and still deploys as a
 // single file you can paste. Each engine sits in its own namespace (SNOOKER, POOL).
 //   npm run worker
