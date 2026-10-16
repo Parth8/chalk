@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { QA, TOPICS, context, search, suggestions, byId } from "../js/pool-rules.js";
-import { startFrame, apply } from "../js/pool.js";
+import { QA, TOPICS, context, search, suggestions, byId } from "../js/pool/rules.js";
+import { startFrame, apply } from "../js/pool/engine.js";
 
 test("pool questions people ask find the right answer first", () => {
   const cases = {

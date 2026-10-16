@@ -7,7 +7,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const ROOT = new URL("../", import.meta.url);
-const START = "// ---- engines: copied from js/engine.js and js/pool.js by `npm run worker`. Don't edit them here. ----";
+const START = "// ---- engines: copied from js/snooker/engine.js and js/pool/engine.js by `npm run worker`. Don't edit them here. ----";
 const END = "// ---- end engines ----";
 
 function namespaced(name, file) {
@@ -19,7 +19,7 @@ function namespaced(name, file) {
 
 /** The engines as they should appear inside the Worker. */
 export function engineBlock() {
-  return `${START}\n${namespaced("SNOOKER", "js/engine.js")}\n\n${namespaced("POOL", "js/pool.js")}\n${END}`;
+  return `${START}\n${namespaced("SNOOKER", "js/snooker/engine.js")}\n\n${namespaced("POOL", "js/pool/engine.js")}\n${END}`;
 }
 
 export function workerWithEngine(worker) {

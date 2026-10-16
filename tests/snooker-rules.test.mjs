@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { QA, TOPICS, context, search, suggestions, byId } from "../js/rules.js";
-import { startFrame, apply } from "../js/engine.js";
+import { QA, TOPICS, context, search, suggestions, byId } from "../js/snooker/rules.js";
+import { startFrame, apply } from "../js/snooker/engine.js";
 
 const top = (q, n = 1) => search(q, n).map((e) => e.id);
 

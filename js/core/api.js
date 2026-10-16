@@ -1,5 +1,7 @@
 // Client for the shared-games Worker: a timeout, friendly errors, nothing else.
 
+import * as store from "./store.js";
+
 const BASE = (document.querySelector('meta[name="api-base"]')?.content || "").replace(/\/$/, "");
 const TIMEOUT_MS = 8000;
 
@@ -11,6 +13,9 @@ export class ApiError extends Error {
     this.data = data;
   }
 }
+
+/** True when the request never got an answer (no signal, timeout): worth trying again later. */
+export const isOffline = (err) => err instanceof ApiError && err.code === "offline";
 
 async function call(path, body) {
   if (!BASE) throw new ApiError("not_configured", "Shared games aren't set up on this copy.");
@@ -39,40 +44,37 @@ async function call(path, body) {
 }
 
 export const api = {
-  create: (reds, game = "snooker") => call("/api/games", game === "pool" ? { game } : { reds }),
+  /** { game: "snooker" | "pool", reds, target } */
+  create: ({ game, reds, target }) => call("/api/games", game === "pool" ? { game, target } : { reds, target }),
   get: (id, v) => call(`/api/games/${id}${v ? `?v=${v}` : ""}`),
-  join: (id, name) => call(`/api/games/${id}/join`, { name }),
+  /** team: everyone playing on this side, including the name typed (doubles) */
+  join: (id, name, team) => call(`/api/games/${id}/join`, team && team.length > 1 ? { name, team } : { name }),
   act: (id, token, v, e) => call(`/api/games/${id}/act`, { token, v, e }),
 };
 
-/* Seat keys for the games you've joined, kept only on this device. */
-const SEATS = "snooker.seats";
-export function seats() {
-  try {
-    const all = JSON.parse(localStorage.getItem(SEATS) || "{}");
-    return all && typeof all === "object" ? all : {};
-  } catch {
-    return {};
-  }
-}
+/* Seat keys for the games you've joined, kept only on this phone. */
+export const seats = () => {
+  const all = store.read(store.KEYS.seats, {});
+  return all && typeof all === "object" ? all : {};
+};
+
 export function seatFor(id) {
   const s = seats()[id];
   return s && (s.seat === 0 || s.seat === 1) && typeof s.token === "string" ? s : null;
 }
+
 export function forgetSeat(id) {
   const all = seats();
   delete all[id];
-  try {
-    localStorage.setItem(SEATS, JSON.stringify(all));
-  } catch {}
+  store.write(store.KEYS.seats, all);
+  store.remove(store.KEYS.outbox + id);
 }
+
 export function keepSeat(id, seat, token, names) {
   const all = seats();
   all[id] = { seat, token, names, at: Date.now() };
   const recent = Object.entries(all)
     .sort((a, b) => b[1].at - a[1].at)
     .slice(0, 12);
-  try {
-    localStorage.setItem(SEATS, JSON.stringify(Object.fromEntries(recent)));
-  } catch {}
+  store.write(store.KEYS.seats, Object.fromEntries(recent));
 }

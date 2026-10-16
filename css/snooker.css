@@ -1,0 +1,77 @@
+/* Snooker's own pieces: the coloured balls, the pad, calling a colour. */
+
+/* ---------------- balls ---------------- */
+
+.ball, .dot {
+  --c: var(--red);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.85) 0 7%, rgba(255, 255, 255, 0) 32%),
+    radial-gradient(circle at 50% 55%, var(--c) 52%, color-mix(in srgb, var(--c) 72%, #000) 100%);
+}
+.dot { display: inline-block; width: 14px; height: 14px; flex: none; }
+[data-ball="red"] { --c: var(--red); }
+[data-ball="yellow"] { --c: var(--yellow); }
+[data-ball="green"] { --c: var(--green); }
+[data-ball="brown"] { --c: var(--brown); }
+[data-ball="blue"] { --c: var(--blue); }
+[data-ball="pink"] { --c: var(--pink); }
+[data-ball="black"] { --c: var(--black); }
+[data-ball="white"] { --c: var(--white); }
+:root:not([data-theme="light"]) [data-ball="black"] { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.22); }
+
+.pad { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px 8px; padding: 4px 2px; }
+.pad .ball {
+  position: relative;
+  aspect-ratio: 1;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font: 800 17px var(--num);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+  transition: transform 0.12s ease, opacity 0.2s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+.pad .ball[data-ball="yellow"], .pad .ball[data-ball="pink"] { color: #3a2a10; text-shadow: none; }
+.pad .ball:active { transform: scale(0.9); }
+.pad .ball.off { opacity: 0.4; filter: saturate(0.55); box-shadow: none; }
+.pad .ball.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5.5px var(--accent), 0 6px 14px rgba(0, 0, 0, 0.22); }
+.pad .ball:disabled { opacity: 0.22; filter: saturate(0.4); box-shadow: none; transform: none; }
+.pad .red {
+  grid-column: 1 / -1;
+  aspect-ratio: auto;
+  height: 64px;
+  border-radius: 32px;
+  font-size: 18px;
+  gap: 2px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background:
+    radial-gradient(ellipse 30% 60% at 22% 26%, rgba(255, 255, 255, 0.55) 0 10%, rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--red) 92%, #fff), color-mix(in srgb, var(--red) 80%, #000));
+}
+.pad .red .count { font-weight: 600; font-size: 14px; opacity: 0.9; margin-left: 8px; }
+.pad .tag {
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: 800 9px var(--font);
+  letter-spacing: 0.05em;
+  padding: 2px 5px;
+  border-radius: 5px;
+  text-shadow: none;
+  white-space: nowrap;
+}
+.pad.locked .ball { pointer-events: none; }
+.pad .ball.callable { opacity: 0.92; filter: none; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--hair); }
+.pad .ball.called { transform: scale(1.08); box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--accent), 0 8px 18px rgba(0, 0, 0, 0.25); }
+.pad .ball.callable .tag { background: var(--ink-soft); color: var(--bg); }
+.pad .red .count { white-space: nowrap; }
+.pad .red.extra { height: 44px; border-radius: 22px; opacity: 0.85; font-size: 14px; }

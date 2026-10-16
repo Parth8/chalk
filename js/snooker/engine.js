@@ -1,6 +1,6 @@
 // The rules of snooker as a tiny state machine. A frame is a list of events; the state is
 // whatever those events add up to, so undo is just "drop the last event and replay".
-// Pure functions only: no DOM, no storage. Tested in tests/engine.test.mjs.
+// Pure functions only: no DOM, no storage. Tested in tests/snooker.test.mjs.
 
 export const VALUE = { red: 1, yellow: 2, green: 3, brown: 4, blue: 5, pink: 6, black: 7 };
 export const COLOURS = ["yellow", "green", "brown", "blue", "pink", "black"];
@@ -38,6 +38,9 @@ export function startFrame(reds, breaker) {
     log: [], // the shared list of everything that happened
   };
 }
+
+/** Is a shot expected right now? (Not once the frame is over, nor while a coin toss is due.) */
+export const playable = (s) => !s.over && !s.toss;
 
 /** The balls the player at the table may legally pot right now. */
 export function ballsOn(s) {

@@ -2,7 +2,7 @@
 // snooker table in table.js. Proportions of a 9-foot table (100 × 50 inch playing surface, in mm).
 // Static, trusted SVG only: no user text ever goes in here.
 
-import { colourOf } from "./pool.js";
+import { colourOf } from "./engine.js";
 
 const W = 1270;
 const L = 2540;

@@ -42,13 +42,20 @@ const pick = async (page, game) => {
   await page.click(`#view-pick [data-game="${game}"]`);
   await page.waitForSelector("#view-home:not([hidden])");
 };
+/** The first game of each kind on a phone shows a walkthrough: skip it (one test goes through it). */
+const skipTour = async (page) => {
+  await page.waitForTimeout(50);
+  if (await page.locator("#coach").count()) await page.click('#coach button:has-text("Skip")');
+};
 const racked = async (page) => {
   await page.waitForSelector("#sheet >> text=rack the balls");
   await page.click('#sheet button:has-text("The balls are racked")');
+  await skipTour(page);
 };
 const tableReady = async (page) => {
   await page.waitForSelector("#sheet >> text=set up the table");
   await page.click('#sheet button:has-text("The table is ready")');
+  await skipTour(page);
 };
 const spotted = async (page) => {
   await page.waitForSelector("#sheet >> text=back on the table");
@@ -87,9 +94,21 @@ try {
     assert.equal(await p.locator("#sheet .close").count(), 0, "no way round it but the button");
     await p.click("#scrim", { position: { x: 10, y: 10 }, force: true });
     assert.equal(await p.locator("#sheet").isVisible(), true, "tapping outside doesn't skip it");
-    await tableReady(p);
+    await p.click('#sheet button:has-text("The table is ready")');
     assert.match(await p.textContent("#guide"), /break-off/i);
     assert.match(await p.textContent("#frame-tag"), /Game 1/);
+  });
+
+  await step("the first game shows a walkthrough of the screen, once", async () => {
+    await p.waitForSelector("#coach");
+    assert.match(await p.textContent("#coach"), /1 of 8\s*The score/);
+    await p.click('#coach button:has-text("Next")');
+    assert.match(await p.textContent("#coach"), /What to do now/);
+    for (let i = 0; i < 6; i++) await p.click('#coach button:has-text("Next")');
+    assert.match(await p.textContent("#coach"), /8 of 8\s*Everything else/);
+    await p.click('#coach button:has-text("Let\'s play")');
+    assert.equal(await p.locator("#coach").count(), 0);
+    assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem("chalk.toured"))), { snooker: true });
   });
 
   await step("red, then tap a colour once to call it and again when it goes in", async () => {
@@ -223,7 +242,7 @@ try {
     assert.equal(await score(p, 0), "0");
     // finishing a game: "game 2", the other player breaks, set the table again
     await p.click('[data-open="menu"]');
-    await p.click('#sheet button:has-text("Rohan concedes")');
+    await p.click('#sheet button:has-text("Rohan gives up")');
     assert.match(await p.textContent("#guide"), /Parth wins/);
     assert.match(await p.textContent(".players .frames"), /1–0\s*GAMES WON/);
     await p.click('#guide button:has-text("Play game 2 · Rohan breaks")');
@@ -235,14 +254,16 @@ try {
     // dark by default, light on request, remembered
     assert.equal(await p.evaluate(() => document.documentElement.dataset.theme || "dark"), "dark");
     await p.click('[data-open="menu"]');
-    await p.click('#sheet button:has-text("Switch to light theme")');
+    await p.click('#sheet button:has-text("Light theme")');
     await p.reload();
     assert.equal(await p.evaluate(() => document.documentElement.dataset.theme), "light");
     await p.click("#resume .resume-row .btn.big");
     await tableReady(p); // no shot played in game 2 yet, so it asks again
     await p.click('[data-open="menu"]');
-    await p.click('#sheet button:has-text("Switch to dark theme")');
+    await p.click('#sheet button:has-text("Light theme")');
+    assert.equal(await p.getAttribute('#sheet button:has-text("Light theme")', "aria-checked"), "false", "the switch shows it's off");
     assert.equal(await p.evaluate(() => document.documentElement.dataset.theme || "dark"), "dark");
+    await p.click("#sheet .close");
     await p.click('[data-open="menu"]');
     await p.click('#sheet button:has-text("Delete this match")');
     await p.click('#sheet .btn.warn:has-text("Delete")');

@@ -23,7 +23,9 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/snooker.css">
+  <link rel="stylesheet" href="css/pool.css">
   <script type="module" src="js/app.js"></script>
 </head>
 <body>
@@ -78,6 +80,13 @@
             <button type="button" role="radio" data-reds="6" aria-checked="false">6</button>
           </div>
         </div>
+        <p class="label" id="target-label">How many games?</p>
+        <div class="seg" role="radiogroup" aria-labelledby="target-label" id="target-pick">
+          <button type="button" role="radio" data-target="0" aria-checked="true">Keep playing</button>
+          <button type="button" role="radio" data-target="2" aria-checked="false">Best of 3</button>
+          <button type="button" role="radio" data-target="3" aria-checked="false">Best of 5</button>
+          <button type="button" role="radio" data-target="4" aria-checked="false">Best of 7</button>
+        </div>
         <button type="button" class="btn primary big" id="start-online">
           <span>Start a shared game</span>
           <small>Get a link · each side scores on their own phone</small>
@@ -91,6 +100,7 @@
 
       <footer class="foot">
         <button type="button" class="link" data-open="ask">Rules &amp; quick answers</button>
+        <button type="button" class="link" data-open="technique">Holding and aiming the cue</button>
         <button type="button" class="link install-link" data-open="install" hidden>Add to home screen</button>
       </footer>
     </section>
@@ -103,12 +113,15 @@
         <span></span>
       </header>
       <form class="card" id="local-form" autocomplete="off">
-        <label class="field"><span>Player or team 1</span><input name="p0" maxlength="24" placeholder="Player 1" enterkeyhint="next"></label>
-        <label class="field"><span>Player or team 2</span><input name="p1" maxlength="24" placeholder="Player 2" enterkeyhint="done"></label>
+        <div class="seg" role="radiogroup" aria-label="Singles or doubles" id="side-pick">
+          <button type="button" role="radio" data-sides="1" aria-checked="true">One v one</button>
+          <button type="button" role="radio" data-sides="2" aria-checked="false">Doubles (2 v 2)</button>
+        </div>
+        <div class="side-fields" id="side-fields"></div>
         <p class="label" id="breaks-label">Who breaks?</p>
         <div class="seg" role="radiogroup" aria-labelledby="breaks-label" id="break-pick">
           <button type="button" role="radio" data-b="0" aria-checked="true">Player 1</button>
-          <button type="button" role="radio" data-b="toss" aria-checked="false">Toss</button>
+          <button type="button" role="radio" data-b="toss" aria-checked="false">Coin toss</button>
           <button type="button" role="radio" data-b="1" aria-checked="false">Player 2</button>
         </div>
         <button type="submit" class="btn primary big"><span>Start</span></button>

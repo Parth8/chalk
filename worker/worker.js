@@ -9,15 +9,17 @@
  *   foul & miss put back
  *   concede                   only for yourself
  *   undo                      only your own last move
- *   coin toss, next frame     either side
- *   restart frame / game      one side asks, the other side agrees (it wipes both scores)
+ *   coin toss, next game      either side (not once someone has won a best-of match)
+ *   restart game / match      one side asks, the other side agrees (it wipes both scores)
  * So one side can never add to, or take away from, the other's score, and both see everything.
  *
  * Routes (JSON):
  *   GET  /api/health
- *   POST /api/games                  { reds } or { game: "pool" }  → { id, v, game }
+ *   POST /api/games                  { reds, target } or { game: "pool", target }  → { id, v, game }
+ *                                    target: games needed to win the match (2, 3, 4), or none
  *   GET  /api/games/<id>?v=<n>       → { v, game }, or { v, same: true } when nothing changed
- *   POST /api/games/<id>/join        { name }            → { seat, token, v, game }
+ *   POST /api/games/<id>/join        { name, team? }     → { seat, token, v, game }
+ *                                    team: the players on this side, for doubles (2 to 4 names)
  *   POST /api/games/<id>/act         { token, v, e }     → { v, game }
  *
  * Settings (Worker → Settings → Bindings / Variables):
@@ -29,7 +31,8 @@
  * Games nobody has touched for 30 days are deleted.
  */
 
-const LIMITS = { name: 24, frames: 60, events: 600, body: 4096, idleMs: 30 * 86400_000 };
+const LIMITS = { name: 24, team: 4, frames: 60, events: 600, body: 4096, idleMs: 30 * 86400_000 };
+const TARGETS = new Set([2, 3, 4]); // best of 3, 5, 7
 const RATE = { windowMs: 60_000, read: 120, write: 60, create: 12 };
 const ID_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i: easy to read out
 const FOUL_KINDS = new Set(["white", "nothing", "wrong-first", "wrong-pot", "off", "touch", "seven", "outside-d", "other"]);
@@ -123,17 +126,18 @@ const schemaReady = new WeakMap();
 function schema(db) {
   if (schemaReady.has(db)) return schemaReady.get(db);
   const ready = db
-    .prepare("SELECT kind FROM games LIMIT 0")
+    .prepare("SELECT kind, meta FROM games LIMIT 0")
     .all()
     .catch(async () => {
       await db.batch([
         db.prepare(
-          "CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, v INTEGER NOT NULL, reds INTEGER NOT NULL, names TEXT NOT NULL, keys TEXT NOT NULL, frames TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'snooker')"
+          "CREATE TABLE IF NOT EXISTS games (id TEXT PRIMARY KEY, v INTEGER NOT NULL, reds INTEGER NOT NULL, names TEXT NOT NULL, keys TEXT NOT NULL, frames TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, kind TEXT NOT NULL DEFAULT 'snooker', meta TEXT NOT NULL DEFAULT '{}')"
         ),
         db.prepare("CREATE INDEX IF NOT EXISTS games_updated ON games (updated)"),
       ]);
-      // tables made before pool existed get the column now
+      // tables made before pool (kind) or best-of matches and doubles (meta) get the columns now
       await db.prepare("ALTER TABLE games ADD COLUMN kind TEXT NOT NULL DEFAULT 'snooker'").run().catch(() => {});
+      await db.prepare("ALTER TABLE games ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'").run().catch(() => {});
     })
     .catch((err) => {
       schemaReady.delete(db);
@@ -146,7 +150,8 @@ function schema(db) {
 async function load(env, id) {
   const row = await env.DB.prepare("SELECT * FROM games WHERE id = ?").bind(id).first();
   if (!row) throw new ApiError(404, "no_game", "This game link has expired or never existed.");
-  return { id: row.id, v: row.v, kind: row.kind === "pool" ? "pool" : "snooker", reds: row.reds, names: JSON.parse(row.names), keys: JSON.parse(row.keys), frames: JSON.parse(row.frames) };
+  const meta = JSON.parse(row.meta || "{}");
+  return { id: row.id, v: row.v, kind: row.kind === "pool" ? "pool" : "snooker", reds: row.reds, names: JSON.parse(row.names), keys: JSON.parse(row.keys), frames: JSON.parse(row.frames), meta };
 }
 
 /** Save only if nobody else saved in between (v is the version we read). */
@@ -160,8 +165,15 @@ async function save(env, g, changes) {
   return g;
 }
 
-/** What everyone may see: names, the rules setting and every move. Never the seat keys. */
-const view = (g) => ({ id: g.id, kind: g.kind, reds: g.reds, players: g.names, frames: g.frames });
+/** What everyone may see: names, teams, the settings and every move. Never the seat keys. */
+const view = (g) => ({ id: g.id, kind: g.kind, reds: g.reds, target: g.meta.target || 0, teams: g.meta.teams || [null, null], players: g.names, frames: g.frames });
+
+/** Has a side won a best-of match? */
+function matchOver(g, frames) {
+  if (!g.meta.target) return false;
+  const won = engineFor(g.kind).framesWon({ reds: g.reds, frames });
+  return won.some((w) => w >= g.meta.target);
+}
 
 /* ------------------------------------------------------------------ */
 /* Routes                                                              */
@@ -170,13 +182,14 @@ const view = (g) => ({ id: g.id, kind: g.kind, reds: g.reds, players: g.names, f
 async function createGame(env, body) {
   const kind = body.game === "pool" ? "pool" : "snooker";
   const reds = kind === "pool" ? 0 : [15, 10, 6].includes(body.reds) ? body.reds : 15;
+  const meta = TARGETS.has(body.target) ? { target: body.target } : {};
   const now = Date.now();
   for (let tries = 0; tries < 3; tries++) {
     const id = randomId();
-    const r = await env.DB.prepare("INSERT INTO games (id, v, kind, reds, names, keys, frames, created, updated) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING")
-      .bind(id, kind, reds, "[null,null]", "[null,null]", "[]", now, now)
+    const r = await env.DB.prepare("INSERT INTO games (id, v, kind, reds, names, keys, frames, meta, created, updated) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING")
+      .bind(id, kind, reds, "[null,null]", "[null,null]", "[]", JSON.stringify(meta), now, now)
       .run();
-    if (r.meta && r.meta.changes === 1) return { id, v: 1, game: { id, kind, reds, players: [null, null], frames: [] } };
+    if (r.meta && r.meta.changes === 1) return { id, v: 1, game: view({ id, kind, reds, names: [null, null], frames: [], meta }) };
   }
   throw new ApiError(500, "server_error", "Couldn't make a game. Try again.");
 }
@@ -189,6 +202,7 @@ async function getGame(env, id, since) {
 
 async function join(env, id, body) {
   const name = cleanName(body.name);
+  const team = body.team === undefined ? null : cleanTeam(body.team);
   for (let tries = 0; tries < 3; tries++) {
     const g = await load(env, id);
     const seat = g.keys.indexOf(null);
@@ -199,6 +213,11 @@ async function join(env, id, body) {
     names[seat] = name;
     keys[seat] = await sha256(token);
     const changes = { names, keys };
+    if (team) {
+      const teams = (g.meta.teams || [null, null]).slice();
+      teams[seat] = team;
+      changes.meta = { ...g.meta, teams };
+    }
     // when the second side joins, a coin toss decides who breaks
     if (!keys.includes(null) && !g.frames.length) changes.frames = [{ breaker: coin(), events: [] }];
     try {
@@ -225,10 +244,13 @@ async function act(env, id, body) {
 
   if (e.t === "restart") {
     // one side asks; the same move from the other side agrees and wipes the frame (or every frame)
+    // `restarts` counts fresh starts, so each phone knows the balls need setting up again
     if (frame.ask && frame.ask.by !== seat) {
-      if (frame.ask.all) frames.splice(0, frames.length, { breaker: frames[0].breaker, events: [] });
+      const restarts = Math.max(...frames.map((f) => f.restarts || 0)) + 1;
+      if (frame.ask.all) frames.splice(0, frames.length, { breaker: frames[0].breaker, events: [], restarts });
       else {
         frame.events = [];
+        frame.restarts = restarts;
         delete frame.ask;
       }
     } else frame.ask = { by: seat, all: !!e.all };
@@ -242,6 +264,7 @@ async function act(env, id, body) {
     frame.events.pop();
   } else if (e.t === "next") {
     if (!s.over) throw new ApiError(409, "not_over", "This game isn't over yet.");
+    if (matchOver(g, frames)) throw new ApiError(409, "match_over", "The match is over.");
     if (frames.length >= LIMITS.frames) throw new ApiError(409, "too_many", "That's a lot of games. Start a new match.");
     frames.push({ breaker: 1 - frame.breaker, events: [] });
   } else {
@@ -271,6 +294,12 @@ function cleanName(raw) {
     .trim();
   if (!name) throw new ApiError(400, "bad_name", "Type a name first.");
   return [...name].slice(0, LIMITS.name).join("");
+}
+
+/** A doubles side: 2 to 4 names. */
+function cleanTeam(raw) {
+  if (!Array.isArray(raw) || raw.length < 2 || raw.length > LIMITS.team) throw new ApiError(400, "bad_team", "A team is 2 to 4 names.");
+  return raw.map(cleanName);
 }
 
 /** Only the fields each move needs, with only the values the rules know. */
@@ -433,11 +462,11 @@ async function rateLimit(request, env, bucket) {
 /* Rules engine                                                        */
 /* ------------------------------------------------------------------ */
 
-// ---- engines: copied from js/engine.js and js/pool.js by `npm run worker`. Don't edit them here. ----
+// ---- engines: copied from js/snooker/engine.js and js/pool/engine.js by `npm run worker`. Don't edit them here. ----
 const SNOOKER = (() => {
   // The rules of snooker as a tiny state machine. A frame is a list of events; the state is
   // whatever those events add up to, so undo is just "drop the last event and replay".
-  // Pure functions only: no DOM, no storage. Tested in tests/engine.test.mjs.
+  // Pure functions only: no DOM, no storage. Tested in tests/snooker.test.mjs.
 
   const VALUE = { red: 1, yellow: 2, green: 3, brown: 4, blue: 5, pink: 6, black: 7 };
   const COLOURS = ["yellow", "green", "brown", "blue", "pink", "black"];
@@ -475,6 +504,9 @@ const SNOOKER = (() => {
       log: [], // the shared list of everything that happened
     };
   }
+
+  /** Is a shot expected right now? (Not once the frame is over, nor while a coin toss is due.) */
+  const playable = (s) => !s.over && !s.toss;
 
   /** The balls the player at the table may legally pot right now. */
   function ballsOn(s) {
@@ -818,7 +850,7 @@ const SNOOKER = (() => {
     const left = remaining(s);
     return { lead, leader, left, snookers: leader !== null && !s.over && lead > left };
   }
-  return { VALUE, COLOURS, BALLS, NAME, newMatch, startFrame, ballsOn, valueOn, remaining, maxBreak, judgePot, penalty, apply, firstOn, OTHER_FOULS, judgeShot, replayFrame, framesWon, nextFrame, standing };
+  return { VALUE, COLOURS, BALLS, NAME, newMatch, startFrame, playable, ballsOn, valueOn, remaining, maxBreak, judgePot, penalty, apply, firstOn, OTHER_FOULS, judgeShot, replayFrame, framesWon, nextFrame, standing };
 })();
 
 const POOL = (() => {
@@ -880,6 +912,9 @@ const POOL = (() => {
       log: [],
     };
   }
+
+  /** Is a shot expected right now? (Not once the rack is over, nor while a break choice is owed.) */
+  const playable = (s) => !s.over && !s.choice;
 
   /** The group a player is on, or null while the table is open. */
   const groupFor = (s, p) => (s.groups ? s.groups[p] : null);
@@ -1107,7 +1142,7 @@ const POOL = (() => {
     const last = match.frames[match.frames.length - 1];
     return { ...match, frames: [...match.frames, { breaker: 1 - last.breaker, events: [] }] };
   }
-  return { SOLIDS, STRIPES, ALL, COLOUR, groupOf, colourOf, GROUP_WORDS, OTHER_FOULS, newMatch, startFrame, groupFor, left, targets, judge, optionsFor, apply, replayFrame, framesWon, nextFrame };
+  return { SOLIDS, STRIPES, ALL, COLOUR, groupOf, colourOf, GROUP_WORDS, OTHER_FOULS, newMatch, startFrame, playable, groupFor, left, targets, judge, optionsFor, apply, replayFrame, framesWon, nextFrame };
 })();
 // ---- end engines ----
 

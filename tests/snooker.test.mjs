@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { startFrame, apply, judgePot, penalty, remaining, standing, ballsOn, newMatch, replayFrame, framesWon, nextFrame } from "../js/engine.js";
+import { startFrame, apply, judgePot, penalty, remaining, standing, ballsOn, newMatch, replayFrame, framesWon, nextFrame } from "../js/snooker/engine.js";
 
 const run = (s, ...events) => events.reduce(apply, s);
 const pot = (ball, extra) => (extra ? { t: "pot", ball, extra: true } : { t: "pot", ball });
@@ -245,7 +245,7 @@ test("calling a colour: tap once to call, the call can change, only the called c
 });
 
 test("judgeShot rules on a described shot", async () => {
-  const { judgeShot } = await import("../js/engine.js");
+  const { judgeShot } = await import("../js/snooker/engine.js");
   const red = fresh();
   // hit a colour first while on a red: the user's own example
   let r = judgeShot(red, { first: "blue" });

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { startFrame, apply, judge, targets, left, newMatch, replayFrame, framesWon, nextFrame, optionsFor, groupOf, ALL } from "../js/pool.js";
+import { startFrame, apply, judge, targets, left, newMatch, replayFrame, framesWon, nextFrame, optionsFor, groupOf, ALL } from "../js/pool/engine.js";
 
 const run = (s, ...events) => events.reduce(apply, s);
 const shot = (o) => ({ t: "shot", rail: true, ...o });

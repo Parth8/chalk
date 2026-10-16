@@ -2,8 +2,8 @@
 // of Play (effective 2025-09-15); common bar-rule differences are answered separately.
 // Plain text with **bold**; the app escapes it before display.
 
-import { groupFor, left, GROUP_WORDS } from "./pool.js";
-import { BASE_SYN, makeSearch } from "./search.js";
+import { groupFor, left, GROUP_WORDS } from "./engine.js";
+import { BASE_SYN, makeSearch } from "../core/search.js";
 
 export function context(s, players = ["You", "Your opponent"]) {
   if (!s) return { me: "you", opp: "your opponent", generic: true };

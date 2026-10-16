@@ -3,7 +3,7 @@
 // escapes it before display, so player names can never inject markup.
 
 import { COLOURS, VALUE, valueOn, remaining, standing, maxBreak } from "./engine.js";
-import { BASE_SYN, makeSearch } from "./search.js";
+import { BASE_SYN, makeSearch } from "../core/search.js";
 
 /** What the answers need to know about the game right now (works with no game too). */
 export function context(s, players = ["You", "Your opponent"]) {

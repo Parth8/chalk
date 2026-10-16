@@ -57,6 +57,9 @@ export function startFrame(_, breaker) {
   };
 }
 
+/** Is a shot expected right now? (Not once the rack is over, nor while a break choice is owed.) */
+export const playable = (s) => !s.over && !s.choice;
+
 /** The group a player is on, or null while the table is open. */
 export const groupFor = (s, p) => (s.groups ? s.groups[p] : null);
 
