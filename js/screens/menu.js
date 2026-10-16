@@ -13,7 +13,7 @@ import { shareCard } from "../core/share-card.js";
 import { soundSettings, setSound, canSpeak, sayNow } from "../core/sound.js";
 import * as store from "../core/store.js";
 import { installWay, installPlace } from "../core/install.js";
-import { gameUI } from "../games.js";
+import { GAMES, gameUI, pickGame } from "../games.js";
 import { askSheet } from "./ask.js";
 import { installSheet } from "./install.js";
 import { linkBlock } from "./share.js";
@@ -76,7 +76,15 @@ export function menuSheet(nav) {
   items.push(h("h3", { text: "Sound and look" }), ...settings());
   if (installWay()) items.push(btn(installPlace === "home" ? "Add to home screen" : "Install the app", installSheet));
 
-  items.push(btn(shared ? "Leave this game" : "New game", () => (closeSheet(), nav.home()), "btn ghost"));
+  const otherGame = Object.values(GAMES).find((g) => g.id !== ui.id);
+  items.push(
+    btn(`Switch to ${otherGame.label}`, () => {
+      closeSheet();
+      pickGame(otherGame.id);
+      nav.home(); // this match stays saved: "Carry on" on the home screen
+    }),
+    btn(shared ? "Leave this game" : "New game", () => (closeSheet(), nav.home()), "btn ghost")
+  );
   if (shared && session.seat !== null)
     items.push(
       btn("Remove it from this phone", () =>

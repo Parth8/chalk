@@ -59,9 +59,16 @@
         <p class="lede" id="home-lede">Never played? No problem. Tap what happens and the app keeps the score, the order and the rules.</p>
       </header>
 
-      <div class="seg game-pick" role="radiogroup" aria-label="Game" id="game-pick">
-        <button type="button" role="radio" data-game="snooker" aria-checked="true">Snooker</button>
-        <button type="button" role="radio" data-game="pool" aria-checked="false">8-ball pool</button>
+      <p class="label pick-label" id="game-label">What are you playing? Tap to switch</p>
+      <div class="game-switch" role="radiogroup" aria-labelledby="game-label" id="game-pick">
+        <button type="button" role="radio" data-game="snooker" aria-checked="true">
+          <span class="pick-art snooker-art" aria-hidden="true"><i data-ball="red"></i><i data-ball="yellow"></i><i data-ball="black"></i></span>
+          <b>Snooker</b>
+        </button>
+        <button type="button" role="radio" data-game="pool" aria-checked="false">
+          <span class="pick-art pool-art" aria-hidden="true"></span>
+          <b>8-ball pool</b>
+        </button>
       </div>
 
       <button type="button" class="card learn" data-open="learn">
@@ -113,6 +120,7 @@
         <span></span>
       </header>
       <form class="card" id="local-form" autocomplete="off">
+        <p class="playing-what"><span id="local-game"></span> <button type="button" class="link" data-go="home">Change game</button></p>
         <div class="seg" role="radiogroup" aria-label="Singles or doubles" id="side-pick">
           <button type="button" role="radio" data-sides="1" aria-checked="true">One v one</button>
           <button type="button" role="radio" data-sides="2" aria-checked="false">Doubles (2 v 2)</button>

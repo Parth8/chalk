@@ -206,8 +206,21 @@ try {
     assert.equal(await p.getAttribute(".pad .red", "aria-label"), "Another red went in on the same shot (11 left)");
   });
 
-  await step("the game survives a reload", async () => {
+  await step("after closing the app, home says which game and switching is one tap away", async () => {
     await p.reload();
+    assert.match(await p.textContent("#game-label"), /What are you playing\?/);
+    assert.equal(await p.getAttribute('#game-pick [data-game="snooker"]', "aria-checked"), "true");
+    await p.click('#game-pick [data-game="pool"]');
+    assert.equal(await p.getAttribute('#game-pick [data-game="pool"]', "aria-checked"), "true");
+    assert.match(await p.textContent("#learn-title"), /New to pool/);
+    assert.match(await p.textContent("#resume"), /Carry on: Parth v Rohan\s*Snooker/, "the snooker match is still there to carry on");
+    await p.click("#start-local");
+    assert.match(await p.textContent("#local-game"), /Playing 8-ball pool/);
+    await p.click('#local-form button:has-text("Change game")');
+    await p.click('#game-pick [data-game="snooker"]');
+  });
+
+  await step("the game survives a reload", async () => {
     await p.click("#resume .resume-row .btn.big");
     assert.equal(await score(p, 0), "7");
     assert.equal(await score(p, 1), "11");
@@ -346,6 +359,13 @@ try {
     await p.click('#sheet button:has-text("Toss the coin")');
     await p.waitForSelector("#sheet .toss-call");
     await p.click("#sheet .close");
+    await p.click('[data-open="menu"]');
+    await p.click('#sheet button:has-text("Switch to 8-ball pool")');
+    await p.waitForSelector("#view-home:not([hidden])");
+    assert.equal(await p.getAttribute('#game-pick [data-game="pool"]', "aria-checked"), "true");
+    await p.click('#resume button:has-text("Carry on: Pinks v Cal & Dev")');
+    await tableReady(p); // no shot played yet in this game, so the table is set up first
+    assert.match(await p.textContent("#frame-tag"), /15 reds/, "back in the snooker match");
     await p.click('[data-open="menu"]');
     await p.click('#sheet button:has-text("Holding and aiming the cue")');
     assert.match(await p.textContent("#sheet"), /1\. Stand steady/);

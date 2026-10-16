@@ -20,7 +20,9 @@ let nav = null; // { openLocal(match), openShared(id, push) }
 
 export function initHome(navigation) {
   nav = navigation;
-  $(".pool-art").replaceChildren(...[1, 11, 8, 6, 13].map((n) => GAMES.pool.pdot(n, "pdot big")));
+  for (const art of document.querySelectorAll(".pool-art")) art.replaceChildren(...[1, 11, 8, 6, 13].map((n) => GAMES.pool.pdot(n, "pdot big")));
+  // the home screen shows three pool balls, to fit next to snooker's three
+  $("#game-pick .pool-art").replaceChildren(...[1, 11, 8].map((n) => GAMES.pool.pdot(n, "pdot big")));
   for (const b of document.querySelectorAll("#view-pick [data-game]"))
     b.addEventListener("click", () => {
       pickGame(b.dataset.game);
@@ -62,7 +64,6 @@ export function showHome() {
 
 function renderHome() {
   const game = pickedGame() || "snooker";
-  const ui = GAMES[game];
   checkSegment("#game-pick", "game", game);
   checkSegment("#reds-pick", "reds", pick.reds);
   checkSegment("#target-pick", "target", pick.target);
@@ -74,16 +75,22 @@ function renderHome() {
   const rows = [];
   const row = (open, label, sub, removeLabel, remove) =>
     h("div", { class: "resume-row" }, btn([h("span", { text: label }), h("small", { text: sub })], open, "btn big"), btn("✕", remove, "icon-btn", { "aria-label": removeLabel, title: removeLabel }));
-  const saved = loadLocal(game);
-  if (saved) {
+  // saved matches of both games (the one picked first), so switching games never hides one
+  for (const g of [game, ...Object.keys(GAMES).filter((x) => x !== game)]) {
+    const saved = loadLocal(g);
+    if (!saved) continue;
     const s = replay(saved);
     const [a, b] = saved.players;
     const won = gamesWon(saved);
-    const bits = [ui.label, `game ${saved.frames.length}`, `games ${won.join("–")}`, targetWords(saved.target), s.over ? "finished" : ""].filter(Boolean);
+    const bits = [GAMES[g].label, `game ${saved.frames.length}`, `games ${won.join("–")}`, targetWords(saved.target), s.over ? "finished" : ""].filter(Boolean);
+    const open = () => {
+      pickGame(g);
+      nav.openLocal(saved);
+    };
     rows.push(
-      row(() => nav.openLocal(saved), `Carry on: ${a} v ${b}`, bits.join(" · "), "Delete this match", () =>
+      row(open, `Carry on: ${a} v ${b}`, bits.join(" · "), "Delete this match", () =>
         confirmSheet("Delete this match?", `${a} v ${b}: every game and score on this phone goes.`, "Delete", () => {
-          deleteLocal(game);
+          deleteLocal(g);
           renderHome();
         })
       )
@@ -134,6 +141,9 @@ function lastNames() {
 }
 
 function showLocalSetup() {
+  const game = pickedGame() || "snooker";
+  const words = [game === "snooker" ? `${pick.reds} reds` : "", targetWords(pick.target)].filter(Boolean).join(", ");
+  $("#local-game").replaceChildren("Playing ", h("b", { text: GAMES[game].label.toLowerCase() }), words ? ` (${words})` : "");
   checkSegment("#side-pick", "sides", pick.doubles ? 2 : 1);
   checkSegment("#break-pick", "b", pick.breaker);
   renderSides();

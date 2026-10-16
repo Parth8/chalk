@@ -549,7 +549,26 @@ svg.table .end.big { fill: var(--ink-soft); font-size: 70px; }
 .pick-art { display: flex; gap: 6px; height: 34px; align-items: center; }
 .snooker-art i { width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.8) 0 7%, rgba(255, 255, 255, 0) 32%), radial-gradient(circle at 50% 55%, var(--c) 52%, color-mix(in srgb, var(--c) 72%, #000) 100%); }
 .note.center { text-align: center; }
-.game-pick { margin-top: -4px; }
+/* the game switch on the home screen: two big, obviously tappable choices */
+.game-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: -4px; }
+.game-switch button {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  padding: 14px; border-radius: var(--radius); border: 2px solid var(--hair); background: var(--card);
+  color: var(--ink-soft); text-align: left; transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+.game-switch button:active { transform: scale(0.97); }
+.game-switch button b { font-size: 17px; }
+.game-switch .pick-art { height: 28px; gap: 4px; }
+.game-switch .snooker-art i { width: 22px; height: 22px; }
+.game-switch .pool-art .pdot.big { width: 22px; height: 22px; }
+.game-switch button[aria-checked="false"] .pick-art { opacity: 0.6; }
+.game-switch button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-tint); color: var(--ink); }
+.game-switch button[aria-checked="true"]::after {
+  content: "✓"; position: absolute; top: 10px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 800;
+}
+.playing-what { margin: 0; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-soft); }
+.playing-what b { color: var(--ink); }
 
 /* ---------------- forms: doubles, match length ---------------- */
 

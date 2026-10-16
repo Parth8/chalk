@@ -2,7 +2,7 @@
 
 **Snooker and 8-ball pool for people who've never played. Tap what happens; the app keeps the score, the order and the rules.**
 
-On first start you pick **snooker** or **8-ball pool** (also called pool or billiards); you can switch any time from the home screen. Chalk is named for what every player puts on their cue, and the chalkboard pubs kept score on.
+On first start you pick **snooker** or **8-ball pool** (also called pool or billiards); you can switch any time: tap the other game under "What are you playing?" on the home screen, or **Switch to…** in the game menu. A match in progress stays saved, and home lists it to carry on whichever game is picked. Chalk is named for what every player puts on their cue, and the chalkboard pubs kept score on.
 
 A light scoreboard for friendly games, made for people who've never played and find the games intimidating. Tap a ball when it drops and it's added to the shared list of potted balls. The app tells you what's on next, works out fouls, shows where to put a colour back, and answers "what if…?" questions at the table. You can share a link so each side scores from their own phone, or keep score for both players on one phone.
 

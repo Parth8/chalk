@@ -3,7 +3,7 @@
 // already have the app swap the whole cache at once instead of file by file.
 // tests/sw.test.mjs checks that FILES lists every script and stylesheet.
 
-const VERSION = "chalk-v7";
+const VERSION = "chalk-v8";
 const FILES = [
   "./",
   "index.html",
