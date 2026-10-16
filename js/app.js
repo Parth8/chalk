@@ -72,7 +72,7 @@ const buzz = () => navigator.vibrate?.(8);
 
 let mode = null; // "local" | "online"
 let match = null; // { players, reds, frames: [{ breaker, events }] }
-const online = { id: null, v: 0, seat: null, token: null, game: null, busy: false, timer: null, down: false };
+const online = { id: null, v: 0, seat: null, token: null, game: null, busy: false, timer: null, down: false, queue: Promise.resolve(), pending: 0, run: 0 };
 const ui = { spotKey: "", spotStep: 0, spotFall: 0, foulDone: "", seen: new Set(), redsPick: 15, breakPick: "0", watch: null };
 
 const state = () => replayFrame(match);
@@ -114,7 +114,7 @@ function goHome() {
   stopPolling();
   mode = null;
   match = null;
-  Object.assign(online, { id: null, v: 0, seat: null, token: null, game: null });
+  Object.assign(online, { id: null, v: 0, seat: null, token: null, game: null, run: online.run + 1 });
   if (location.search) history.pushState(null, "", location.pathname);
   renderHome();
   show("home");
@@ -235,7 +235,7 @@ async function openOnline(id, push = false) {
   stopPolling();
   if (push) history.pushState(null, "", `?g=${id}`);
   mode = "online";
-  Object.assign(online, { id, v: 0, game: null, seat: null, token: null });
+  Object.assign(online, { id, v: 0, game: null, seat: null, token: null, run: online.run + 1 });
   const mine = seatFor(id);
   if (mine) Object.assign(online, { seat: mine.seat, token: mine.token });
   $("#join-card").replaceChildren(h("p", { class: "note", text: "Loading the game…" }));
@@ -432,24 +432,35 @@ async function dispatch(e) {
     render();
     return;
   }
-  // shared game: show it straight away, then let the Worker confirm
-  const before = structuredClone(match);
-  const v = online.v;
+  // shared game: show it straight away, then send moves to the Worker one at a time, in order.
+  // (Sent together, a later move can arrive first: a black before the red it follows.)
   if (e.t === "undo") eventsNow().pop();
   else if (e.t === "next") match = nextFrame(match);
   else eventsNow().push({ ...e, by: online.seat });
   render();
+  const run = online.run;
+  online.pending++;
   online.busy = true;
-  try {
-    applyServer(await api.act(online.id, online.token, v, e));
-  } catch (err) {
-    match = before;
-    if (err.data && err.data.game) applyServer(err.data);
-    else render();
-    toast(err.code === "stale" ? "The other phone just changed something. Have another look." : err.message);
-  } finally {
-    online.busy = false;
-  }
+  online.queue = online.queue.then(async () => {
+    if (run !== online.run) return; // an earlier move failed, and this one was built on it
+    try {
+      const r = await api.act(online.id, online.token, online.v, e);
+      online.v = r.v;
+      online.game = r.game;
+      if (online.pending === 1) applyServer(r); // later moves are still on their way: keep showing them
+    } catch (err) {
+      online.run++;
+      toast(err.code === "stale" ? "The other phone just changed something. Have another look." : err.message);
+      try {
+        applyServer(err.data && err.data.game ? err.data : await api.get(online.id));
+      } catch {
+        if (online.game) applyServer({ v: online.v, game: online.game });
+      }
+    } finally {
+      online.pending--;
+      online.busy = online.pending > 0;
+    }
+  });
 }
 
 function undoLocal() {

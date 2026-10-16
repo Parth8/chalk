@@ -247,7 +247,7 @@ async function act(env, id, body) {
 function cleanName(raw) {
   const name = String(raw ?? "")
     .normalize("NFC")
-    .replace(/[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g, "")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!name) throw new ApiError(400, "bad_name", "Type a name first.");

@@ -38,6 +38,13 @@ test("the Worker carries an exact copy of the rules engine", () => {
   assert.equal(src, workerWithEngine(src), "run `npm run worker` to copy js/engine.js into the Worker");
 });
 
+test("no invisible characters hide in the source (they vanish when pasted into the dashboard)", () => {
+  for (const file of ["../worker/worker.js", "../js/engine.js", "../js/app.js", "../js/rules.js"]) {
+    const src = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.doesNotMatch(src, /[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/, file);
+  }
+});
+
 test("health, origin check, and not-found", async () => {
   const env = setup();
   assert.deepEqual((await call(env, "GET", "/api/health")).body, { ok: true, db: true });
@@ -53,7 +60,7 @@ test("create, join twice (coin toss), then the game is full; keys never leave th
   assert.equal(made.status, 201);
   assert.match(made.body.id, /^[a-z2-9]{10}$/);
   const id = made.body.id;
-  const a = await call(env, "POST", `/api/games/${id}/join`, { name: "  Asha‮  " });
+  const a = await call(env, "POST", `/api/games/${id}/join`, { name: "  Asha\u202e  " });
   assert.equal(a.body.seat, 0);
   assert.match(a.body.token, /^[0-9a-f]{64}$/);
   assert.deepEqual(a.body.game.players, ["Asha", null]);
@@ -132,8 +139,10 @@ test("stale views, illegal moves, junk and bad keys are refused", async () => {
 });
 
 test("clean names and moves", () => {
-  assert.equal(_test.cleanName("  Team​  Pink \n"), "Team Pink");
+  assert.equal(_test.cleanName("  Team\u200b  Pink \n"), "Team Pink");
   assert.equal(_test.cleanName("x".repeat(40)).length, 24);
+  assert.equal(_test.cleanName("José Ünal पार्थ"), "José Ünal पार्थ", "accents and Indian scripts survive");
+  assert.equal(_test.cleanName("\u202eevil\u2066"), "evil", "direction tricks are removed");
   assert.throws(() => _test.cleanName(""));
   assert.deepEqual(_test.cleanEvent({ t: "foul", kind: "wrong-pot", colours: ["blue"], reds: 0, white: false, called: null }), { t: "foul", kind: "wrong-pot", colours: ["blue"] });
   const ids = new Set(Array.from({ length: 200 }, () => _test.randomId()));

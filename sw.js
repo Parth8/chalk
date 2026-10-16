@@ -1,7 +1,8 @@
 // Offline support: serve the app from the cache, refresh the cache in the background.
-// The shared-game API is never cached. Bump VERSION when files are added or removed.
+// The shared-game API is never cached. Bump VERSION with every release, so phones that
+// already have the app swap the whole cache at once instead of file by file.
 
-const VERSION = "snooker-v1";
+const VERSION = "snooker-v2";
 const FILES = [
   "./",
   "index.html",
@@ -20,7 +21,7 @@ const FILES = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES.map((f) => new Request(f, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (e) => {

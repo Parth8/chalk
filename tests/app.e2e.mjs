@@ -14,12 +14,15 @@ const API = "https://snooker-api.8parthaggarwal1999.workers.dev";
 const env = { DB: new FakeD1(), ALLOWED_ORIGINS: new URL(SITE).origin };
 
 const browser = await chromium.launch();
+let posts = 0;
 const errors = [];
 
 async function phone() {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
   await ctx.route(`${API}/**`, async (route) => {
     const req = route.request();
+    // like a real phone signal: moves take a while, and a later one can overtake an earlier one
+    if (req.method() === "POST") await new Promise((r) => setTimeout(r, (posts++ % 2 ? 40 : 450)));
     const res = await worker.fetch(
       new Request(req.url(), { method: req.method(), headers: { ...req.headers(), "CF-Connecting-IP": "10.0.0.1" }, body: req.postData() || undefined }),
       env,
@@ -179,10 +182,15 @@ try {
     assert.equal(await theirs.locator(".pad .red").isDisabled(), true);
     assert.equal(await theirs.locator("#btn-foul").isDisabled(), true);
     assert.equal(await mine.locator(".pad .red").isDisabled(), false);
+    // a quick burst of taps over a slow, out-of-order network still lands in order
     await mine.click(".pad .red");
     await mine.click('.pad [data-ball="black"]');
-    assert.equal(await score(mine, me), "8");
-    await theirs.waitForFunction((p) => document.querySelectorAll(".player .p-score")[p].textContent === "8", me, { timeout: 8000 });
+    await mine.click(".pad .red");
+    await mine.click('.pad [data-ball="pink"]');
+    assert.equal(await score(mine, me), "15");
+    await theirs.waitForFunction((p) => document.querySelectorAll(".player .p-score")[p].textContent === "15", me, { timeout: 8000 });
+    await mine.waitForFunction(() => !document.querySelector("#toast").classList.contains("show") || !/fit|changed/.test(document.querySelector("#toast").textContent));
+    assert.equal(await score(mine, me), "15", "nothing was rolled back");
     assert.equal(await theirs.locator("#btn-undo").isDisabled(), true, "can't undo the other side's pot");
     await mine.waitForTimeout(300);
     await shot(mine, "shared-mine");
