@@ -24,7 +24,7 @@ function pen(c, extra = 0) {
 }
 const spotsBack = "Reds potted on a foul stay down; colours go back on their spots.";
 
-export const TOPICS = ["The white", "Missing", "Calling a colour", "Order of play", "Spots", "Fouls", "Snookers & free ball", "End of frame", "Basics"];
+export const TOPICS = ["The white", "Ball in hand", "Missing", "Calling a colour", "Order of play", "Spots", "Fouls", "Snookers & free ball", "End of frame", "Basics"];
 
 export const QA = [
   /* ---------------- The white ---------------- */
@@ -49,7 +49,7 @@ export const QA = [
   },
   {
     id: "ball-in-hand",
-    topic: "The white",
+    topic: "Ball in hand",
     q: "Is it ball in hand for my opponent after a foul?",
     keys: "ball in hand foul anywhere place white opponent pool",
     a: (c) =>
@@ -58,11 +58,83 @@ export const QA = [
   },
   {
     id: "place-white",
-    topic: "The white",
+    topic: "Ball in hand",
     q: "Where do I put the white after an in-off?",
     keys: "place white d where put in hand baulk semicircle position",
     show: "d",
     a: () => `Anywhere **inside the D or on its lines**. From there you can play in any direction, even at balls behind the baulk line.`,
+  },
+  {
+    id: "when-in-hand",
+    topic: "Ball in hand",
+    q: "When is the white in hand?",
+    keys: "when white in hand ball in hand get times",
+    a: () =>
+      `Only these times:\n• The **break-off** at the start of a frame\n• After the white is **potted** (in-off)\n• After the white **leaves the table**\n• For a **re-spotted black**\n` +
+      `Every other time, including after other fouls, the white is played from where it stopped.`,
+  },
+  {
+    id: "outside-d",
+    topic: "Ball in hand",
+    q: "Can I place the white outside the D, anywhere behind the baulk line?",
+    keys: "outside d behind baulk line anywhere place white in hand pool kitchen",
+    show: "d",
+    a: (c) =>
+      `No. Only **inside the D or on its lines**, not the rest of the baulk area. Playing from outside the D is a foul: ${pen(c)} to ${c.opp}.\n` +
+      `In the app: **Foul → Played from outside the D**.`,
+  },
+  {
+    id: "move-in-hand",
+    topic: "Ball in hand",
+    q: "Can I move the white again after placing it in the D?",
+    keys: "move adjust reposition white again after placing in hand pick up",
+    a: () => `Yes. While it's in hand you can pick it up and place it again as often as you like. It's in play once you've struck it.`,
+  },
+  {
+    id: "backwards",
+    topic: "Ball in hand",
+    q: "From the D, can I play backwards or at balls in baulk?",
+    keys: "backwards behind baulk direction any d in hand play towards bottom cushion",
+    a: () => `Yes. Unlike some pool rules, there's no restriction on direction: from the D you can play at any ball on, wherever it is, including balls behind the baulk line.`,
+  },
+  {
+    id: "stopped-in-d",
+    topic: "Ball in hand",
+    q: "The white stopped in the D. Can I pick it up and move it?",
+    keys: "white stopped rests in d inside baulk move pick up",
+    a: (c) => `No. It's only in hand after it's been potted or left the table. Otherwise it's played from exactly where it stopped. Moving it is a foul: ${pen(c)} to ${c.opp}.`,
+  },
+  {
+    id: "free-in-hand",
+    topic: "Ball in hand",
+    q: "Can I get a free ball when the white is in hand?",
+    keys: "free ball in hand d snookered from everywhere white potted",
+    a: () =>
+      `Only if you'd be snookered from **every** spot in the D. If any position in the D gives you a clear hit on both sides of a ball on, there's no free ball: place the white there.`,
+  },
+  {
+    id: "inoff-colour",
+    topic: "Ball in hand",
+    q: "I potted my colour but the white went in too?",
+    keys: "potted colour white went in-off too same shot cue ball scratch also",
+    a: (c) =>
+      `Foul: the colour doesn't count and goes **back on its spot**. **${c.opp}** gets 4 or the colour's value if that's more, and plays with the white in hand in the D.`,
+  },
+  {
+    id: "inoff-last-red",
+    topic: "Ball in hand",
+    q: "What if I pot the last red and the white goes in?",
+    keys: "last red final white in-off same shot scratch",
+    a: (c) =>
+      `Foul: the red doesn't score but **stays down**, so there are no reds left. **${c.opp}** gets **4 points**, places the white in the D and is **on the yellow**.`,
+  },
+  {
+    id: "inoff-break",
+    topic: "Ball in hand",
+    q: "What if the white goes in on the break-off?",
+    keys: "break off opening first shot white in-off scratch",
+    a: () =>
+      `Foul: 4 points to your opponent (more if a colour was hit first or potted). Any reds that went in stay down. They take the white in hand in the D, or make you break again.`,
   },
   {
     id: "white-off",
@@ -288,7 +360,8 @@ export const QA = [
     keys: "spot taken occupied covered blocked respot ball in the way",
     a: () =>
       `Put it on the **highest-value spot that's free**: black spot, then pink, blue, brown, green, yellow.\n` +
-      `If every spot is taken, place it as near its own spot as possible, towards the top cushion. For pink and black, if that's blocked too, go straight below the spot instead. It mustn't touch another ball.`,
+      `If every spot is taken, place it as near its own spot as possible, towards the top cushion. For pink and black, if that's blocked too, go straight below the spot instead. It mustn't touch another ball.\n` +
+      `"Taken" includes the **white** sitting on or touching the spot.`,
   },
   {
     id: "two-spot",
@@ -368,6 +441,21 @@ export const QA = [
     keys: "ball off table jump floor leave",
     a: (c) =>
       `Foul: ${c.opp} gets ${pen(c)}, or the value of the ball that left the table if that's more. A red stays off; a colour goes back on its spot; the white means ball in hand in the D.`,
+  },
+  {
+    id: "off-meaning",
+    topic: "Fouls",
+    q: "A ball jumped up but came back onto the table, or stopped on the cushion top?",
+    keys: "came back onto table landed cushion top rail wood bounced jumped stays",
+    a: () =>
+      `A ball is only **off the table** if it ends up somewhere other than the cloth or a pocket: the floor, the wooden rail or the cushion top. If it bounces back onto the cloth, play on: no foul.`,
+  },
+  {
+    id: "feather",
+    topic: "Fouls",
+    q: "Does the faintest touch count as hitting the ball?",
+    keys: "feather faint thin touch kiss count hit contact graze",
+    a: () => `Yes. Any contact counts as hitting it, however faint.`,
   },
   {
     id: "out-of-turn",
@@ -522,7 +610,7 @@ export const QA = [
     q: "How is it different from pool?",
     keys: "pool difference 8 ball eight compared",
     a: () =>
-      `• Fouls give **points to your opponent** (4 to 7), not ball in hand.\n• Ball in hand only after the white goes in or off, and only in the D.\n• No cushion needed after contact.\n• You don't call pockets, only which colour you're on.`,
+      `• Fouls give **points to your opponent** (4 to 7), not ball in hand.\n• Ball in hand only after the white goes in or off, and only in the D.\n• No cushion needed after contact.\n• You don't call pockets, only which colour you're on.\n• No push-out, and no "two shots" or "carry".`,
   },
   {
     id: "stalemate",
@@ -588,7 +676,10 @@ export function suggestions(s) {
   if (!s) return ["pot-white", "called-missed", "pot-via-red", "order", "foul-value", "spots"];
   if (s.toss) return ["tie", "place-white", "frame-end"];
   if (s.over) return ["who-breaks", "max", "tie"];
-  if (s.foul) return ["after-foul", "free-ball", "play-again", "ball-in-hand", "foul-and-miss"];
+  if (s.foul)
+    return s.inHand
+      ? ["after-foul", "place-white", "free-in-hand", "play-again", "outside-d", "move-in-hand"]
+      : ["after-foul", "ball-in-hand", "free-ball", "play-again", "stopped-in-d", "foul-and-miss"];
   if (s.free) return ["free-ball", "free-behind", "snooker"];
   const st = standing(s);
   const list =
@@ -597,7 +688,7 @@ export function suggestions(s) {
       : s.phase === "colour"
         ? ["called-missed", "pot-via-red", "wrong-colour", "colour-plant", "must-call", "pot-white"]
         : ["out-of-order", "pot-white", "foul-black", "tie", "missed-pot"];
-  if (s.inHand) list.unshift("place-white");
+  if (s.inHand) list.unshift("place-white", "outside-d", "backwards");
   if (st.snookers) list.unshift("needs-snookers");
   return list.slice(0, 6);
 }

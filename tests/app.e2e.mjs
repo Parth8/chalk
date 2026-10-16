@@ -119,6 +119,30 @@ try {
     await p.click("#sheet .close");
   });
 
+  await step("after an in-off the next player sees the D, and can log playing from outside it", async () => {
+    const before = Number(await score(p, 0));
+    await p.click("#btn-foul");
+    assert.equal(await p.locator('.choice:has-text("outside the D")').count(), 0, "only offered with the white in hand");
+    await p.click('.choice:has-text("Potted the white")');
+    // Rohan was on a colour and hadn't called one, so the rules make it 7
+    assert.equal(await p.textContent(".verdict .btn"), "Give 7 to Parth");
+    await p.click(".verdict .btn");
+    assert.equal(Number(await score(p, 0)), before + 7);
+    assert.match(await p.textContent("#alerts"), /White in hand: anywhere in the D/);
+    assert.match(await p.textContent("#guide"), /White in hand/);
+    assert.equal(await p.locator("#guide svg.table .d-hot").count(), 1, "the D is drawn next to what's on");
+    await p.click('#alerts button:has-text("Show me")');
+    assert.match(await p.textContent("#sheet"), /move it as often as you like/);
+    await p.click("#sheet .close");
+    await p.click(".ask-btn");
+    assert.match(await p.textContent("#sheet"), /Where do I put the white after an in-off/);
+    await p.click("#sheet .close");
+    await p.click("#btn-foul");
+    assert.equal(await p.locator('.choice:has-text("Played from outside the D")').count(), 1);
+    await shot(p, "in-hand-foul");
+    await p.click("#sheet .close");
+  });
+
   /* ---------------- two phones ---------------- */
   const a = await phone();
   const b = await phone();

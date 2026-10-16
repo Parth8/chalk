@@ -577,7 +577,15 @@ function renderGuide(s) {
         { class: "g-card foul", "data-key": `foul-${evKey()}` },
         h("p", { class: "g-kicker", text: `Foul by ${off}` }),
         h("p", { class: "g-title", text: `${s.foul.pen} to ${inc}` }),
-        h("p", { class: "g-text" }, cap(s.foul.why), ". ", s.inHand ? h("b", { text: "White in hand: anywhere in the D." }) : "Play from where the white stopped."),
+        h(
+          "p",
+          { class: "g-text" },
+          cap(s.foul.why),
+          ". ",
+          s.inHand
+            ? [h("b", { text: "White in hand: anywhere in the D." }), " ", btn("Show me", () => pictureSheet("White in hand", "Anywhere inside the D, or on its lines. Pick it up and move it as often as you like until you play. Any direction is fine.", { d: true }), "link")]
+            : "Play from where the white stopped. It's not ball in hand."
+        ),
         mine
           ? h(
               "div",
@@ -635,8 +643,13 @@ function renderGuide(s) {
       h("p", { class: "g-text", text }),
       extra
     );
-    if (s.inHand && !s.foul && eventsNow().length)
-      card.append(h("p", { class: "g-text" }, h("b", { text: "White in hand: " }), "place it anywhere in the D. ", btn("Show me", () => pictureSheet("White in hand", "Anywhere inside the D, or on its lines. You can play in any direction.", { d: true }), "link")));
+    if (s.inHand) {
+      // white in hand: show the D right there, next to what's on
+      if (eventsNow().length) card.append(h("p", { class: "g-text" }, h("b", { text: "White in hand: " }), "anywhere inside the D or on its lines, then play in any direction."));
+      card.classList.add("spot", "in-hand");
+      const copy = h("div", { class: "spot-copy" }, ...card.childNodes);
+      card.replaceChildren(copy, h("span", { html: tableSVG({ d: true, labels: false }) }));
+    }
     if (mode === "online" && !can("turn", s)) card.append(h("p", { class: "g-text", text: online.seat === null ? `${me}'s phone logs this visit.` : `${me} logs this visit on their phone. You'll see it here live.` }));
     cards.push(card);
   }
@@ -864,6 +877,7 @@ const FOULS = [
   ["off", "Knocked a ball off the table", "Add it below"],
   ["touch", "Touched a ball, push or jump", "Hand, cue or clothes · double hit · feet off the floor"],
   ["seven", "A 7-point foul", "Reds twice in a row · used a ball to measure"],
+  ["outside-d", "Played from outside the D", "With the white in hand", (s) => s.inHand],
 ];
 
 function foulSheet(prefill = {}, why = "") {
@@ -885,7 +899,7 @@ function foulSheet(prefill = {}, why = "") {
       h(
         "div",
         { class: "choices" },
-        FOULS.map(([k, label, sub]) =>
+        FOULS.filter(([, , , when]) => !when || when(s)).map(([k, label, sub]) =>
           h(
             "button",
             {

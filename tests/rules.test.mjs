@@ -24,6 +24,18 @@ test("the questions people actually ask find the right answer first", () => {
     "do i need to hit a cushion": "cushion",
     "foul on black": "foul-black",
     "where does the pink go": "spots",
+    "when do I get ball in hand": "when-in-hand",
+    "can I place the white anywhere behind the baulk line": "outside-d",
+    "can i move the cue ball after placing it": "move-in-hand",
+    "can I shoot backwards from the D": "backwards",
+    "white stopped in the D can I move it": "stopped-in-d",
+    "free ball with ball in hand": "free-in-hand",
+    "I potted the blue but the white went in too": "inoff-colour",
+    "potted the last red and in-off": "inoff-last-red",
+    "scratch on the break": "inoff-break",
+    "ball jumped and came back on the table": "off-meaning",
+    "ball in hand anywhere like pool": "ball-in-hand",
+    "where do I place the cue ball": "place-white",
   };
   for (const [q, id] of Object.entries(cases)) assert.deepEqual(top(q), [id], q);
   assert.ok(top("called blue potted pink", 4).includes("wrong-colour"));

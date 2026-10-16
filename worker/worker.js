@@ -31,7 +31,7 @@
 const LIMITS = { name: 24, frames: 60, events: 600, body: 4096, idleMs: 30 * 86400_000 };
 const RATE = { windowMs: 60_000, read: 120, write: 60, create: 12 };
 const ID_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"; // no 0/o, 1/l/i: easy to read out
-const FOUL_KINDS = new Set(["white", "nothing", "wrong-first", "wrong-pot", "off", "touch", "seven", "other"]);
+const FOUL_KINDS = new Set(["white", "nothing", "wrong-first", "wrong-pot", "off", "touch", "seven", "outside-d", "other"]);
 
 class ApiError extends Error {
   constructor(status, code, message, extra) {
