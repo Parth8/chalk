@@ -535,7 +535,9 @@ export const QA = [
     a: (c) =>
       c.generic
         ? `8 per red (a red plus a black) plus 27 for the colours. 147 with 15 reds.`
-        : `**${remaining(c.s)}**: ${c.reds} red${c.reds === 1 ? "" : "s"} at 8 each (red + black)${c.phase === "colour" ? ", the colour you're on (up to 7)" : ""}${c.phase === "clear" ? "" : ", plus 27 for the colours"}.`,
+        : c.phase === "clear"
+          ? `**${remaining(c.s)}**: just the colours still on the table, ${COLOURS.slice(c.s.next).map((b) => `${b} ${VALUE[b]}`).join(", ")}.`
+          : `**${remaining(c.s)}**: ${c.reds} red${c.reds === 1 ? "" : "s"} at 8 each (red + black)${c.phase === "colour" ? ", the colour you're on (up to 7)" : ""}, plus 27 for the colours.`,
   },
 
   /* ---------------- End of a game ---------------- */
@@ -566,7 +568,7 @@ export const QA = [
     topic: "End of a game",
     q: "When can I concede the game?",
     keys: "concede give up resign forfeit",
-    a: () => `Any time it's your turn. It's considered good manners to only concede once you need snookers. In the app: **⋯ → Concede this game**.`,
+    a: () => `Any time: giving up the game you're playing is always allowed. It's good manners to only do it once you need snookers. In the app: **⋯ → Give up this game**.`,
   },
   {
     id: "max",

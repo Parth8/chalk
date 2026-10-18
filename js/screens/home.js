@@ -100,7 +100,7 @@ function renderHome() {
   if (recent && Date.now() - recent[1].at < 2 * 86400_000) {
     const [id, seat] = recent;
     rows.push(
-      row(() => nav.openShared(id, true), "Back to your shared game", (seat.names || []).filter(Boolean).join(" v ") || id, "Remove from this phone", () =>
+      row(() => nav.openShared(id, true), "Back to your shared game", [seat.kind ? GAMES[seat.kind === "pool" ? "pool" : "snooker"].label : "", (seat.names || []).filter(Boolean).join(" v ") || id].filter(Boolean).join(" · "), "Remove from this phone", () =>
         confirmSheet("Remove this shared game?", "It's taken off this phone and you lose your seat in it. The other side keeps their copy.", "Remove", () => {
           forgetSeat(id);
           renderHome();
@@ -141,6 +141,7 @@ function lastNames() {
 }
 
 function showLocalSetup() {
+  if (!history.state?.screen) history.pushState({ screen: "local" }, ""); // Back returns home
   const game = pickedGame() || "snooker";
   const words = [game === "snooker" ? `${pick.reds} reds` : "", targetWords(pick.target)].filter(Boolean).join(", ");
   $("#local-game").replaceChildren("Playing ", h("b", { text: GAMES[game].label.toLowerCase() }), words ? ` (${words})` : "");

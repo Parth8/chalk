@@ -2,7 +2,7 @@
 // three buttons, and the list of what happened. Everything particular to snooker or pool comes
 // from the game's own screens module (js/snooker/ui.js, js/pool/ui.js) through one interface.
 
-import { $, h, btn, markNew } from "../core/dom.js";
+import { $, h, btn, markNew, toast } from "../core/dom.js";
 import { sheet, closeSheet, isOpen, onSheetClose } from "../core/sheet.js";
 import { session, act, can, state, names, eventsNow, frameNo, isShared, restartLocal } from "../core/session.js";
 import { gamesWon, matchWinner, gamesNeeded, playerUp, playerNext, targetWords, sideName } from "../core/match.js";
@@ -19,6 +19,8 @@ export function renderGame() {
   if (!session.match || !session.match.frames.length) return;
   const ui = gameUI();
   const s = state();
+  $("#view-game").classList.toggle("game-over", s.over);
+  noticeDeclined();
   renderHeader(ui);
   renderPlayers(ui, s);
   $("#standing").replaceChildren(...[].concat(ui.standing(s), matchLine(s)));
@@ -51,7 +53,7 @@ function renderPlayers(ui, s) {
     const team = m.teams?.[p]?.length > 1;
     return h(
       "div",
-      { class: `player${at(p) ? " at" : ""}`, "aria-label": `${n[p]}: ${body.label}` },
+      { class: `player${at(p) ? " at" : ""}${s.over && s.winner === p ? " won" : ""}`, "aria-label": `${n[p]}: ${body.label}` },
       h("div", { class: "p-name" }, h("span", { text: n[p] }), isShared() && session.seat === p ? h("span", { class: "p-you", text: "YOU" }) : null),
       team ? h("div", { class: "p-up", text: at(p) ? `${playerUp(m, p)} to play` : `next: ${playerNext(m, p)}` }) : null,
       h("div", { class: `p-score ${ui.scoreClass}`, text: body.big }),
@@ -129,6 +131,20 @@ function newMatchButton() {
   return btn("Play another match (asks the other side)", () => act({ t: "restart", all: true }), "btn primary");
 }
 
+/** When the other side says no to this phone's restart request, say so (the card just goes away). */
+let asked = null;
+let cancelledByMe = false;
+function noticeDeclined() {
+  const m = session.match;
+  const ask = isShared() ? m.frames[frameNo() - 1].ask : null;
+  const mine = ask && ask.by === session.seat ? { id: session.id, games: m.frames.length, restarts: m.frames[frameNo() - 1].restarts || 0 } : null;
+  if (asked && !ask && !cancelledByMe && asked.id === session.id && asked.games === m.frames.length && asked.restarts === (m.frames[frameNo() - 1].restarts || 0)) {
+    toast(`${names()[1 - session.seat]} said no, so the game carries on.`);
+  }
+  if (!ask) cancelledByMe = false;
+  asked = mine;
+}
+
 /** In a shared game, one side asked to restart: the other side agrees or says no. */
 function restartAsk() {
   if (!isShared()) return null;
@@ -143,7 +159,7 @@ function restartAsk() {
     h("p", { class: "g-kicker", text: "Restart?" }),
     h("p", { class: "g-title", text: mine ? `Waiting for ${n[1 - ask.by]} to agree` : `${n[ask.by]} wants to ${what}` }),
     mine
-      ? h("div", { class: "row" }, btn("Cancel", () => act({ t: "restart-no" })))
+      ? h("div", { class: "row" }, btn("Cancel", () => ((cancelledByMe = true), act({ t: "restart-no" }))))
       : session.seat !== null
         ? h("div", { class: "row" }, btn("Agree", () => act({ t: "restart", all: ask.all }), "btn warn"), btn("No, keep playing", () => act({ t: "restart-no" })))
         : null

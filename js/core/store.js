@@ -9,6 +9,7 @@ export const KEYS = {
   teams: "chalk.teams", // the same for doubles: { teams: [[a, b], [c, d]], teamNames }
   seats: "snooker.seats", // keys for shared games joined from this phone
   outbox: "chalk.outbox.", // + game id: moves waiting for signal
+  view: "chalk.view.", // + game id: the shared game as this phone last saw it (to open with no signal)
   theme: "snooker.theme", // "light", or nothing for dark (read before first paint by theme.js)
   sound: "chalk.sound", // { clicks, voice }
   toured: "chalk.toured", // games whose walkthrough has been shown: { snooker: true }

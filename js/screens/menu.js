@@ -20,7 +20,7 @@ import { linkBlock } from "./share.js";
 import { TECHNIQUE } from "./technique.js";
 import { tourSteps } from "./game.js";
 
-/** nav: { home() } — how to leave the game screen. */
+/** nav: { home() } — how to leave the game screen. Help first; anything that wipes scores last. */
 export function menuSheet(nav) {
   const ui = gameUI();
   const s = state();
@@ -30,25 +30,50 @@ export function menuSheet(nav) {
   const items = [];
 
   if (shared) {
-    items.push(h("p", { class: "lead-text", text: session.seat === null ? "You're watching. Only the two sides can score." : `You're ${n[session.seat]}. You score your own turns; the other phone scores theirs.` }), linkBlock());
+    items.push(
+      h("p", { class: "lead-text", text: session.seat === null ? "You're watching. Only the two sides can score." : `You're ${n[session.seat]}. You score your own turns; the other phone scores theirs.` }),
+      btn("Invite: show the link and QR code", () => openSheet("Invite to this game", linkBlock()))
+    );
   }
 
+  items.push(
+    h("h3", { text: "Help" }),
+    btn("Rules & quick answers", () => askSheet()),
+    btn(ui.setupTitle, () => openSheet(ui.setupTitle, ...ui.setupPicture(session.match))),
+    btn(`${ui.lessonsTitle} (1 minute)`, () => lessonSheet(ui.lessons, ui.lessonsTitle)),
+    btn("Holding and aiming the cue", () => lessonSheet(TECHNIQUE, "Cue technique basics")),
+    btn("Show me around the screen", () => (closeSheet(), startTour(tourSteps(ui)))),
+    btn("Toss a coin", () => tossSheet({ title: "Coin toss", names: [sideName(session.match, 0), sideName(session.match, 1)] }))
+  );
+  if (session.match.frames.some((f, i) => i < session.match.frames.length - 1 || s.over)) items.push(btn("Share the score so far", () => shareSoFar(ui)));
+
+  items.push(h("h3", { text: "Sound and look" }), ...settings());
+  if (installWay()) items.push(btn(installPlace === "home" ? "Add to home screen" : "Install the app", installSheet));
+
+  items.push(h("h3", { text: "This match" }));
+  const otherGame = Object.values(GAMES).find((g) => g.id !== ui.id);
+  items.push(
+    btn(shared ? "Leave (you can come back)" : "Home (this match stays saved)", () => (closeSheet(), nav.home())),
+    btn(`Switch to ${otherGame.label}`, () => {
+      closeSheet();
+      pickGame(otherGame.id);
+      nav.home(); // this match stays saved: "Carry on" on the home screen
+    })
+  );
   if (!s.over && can("concede", s)) {
-    if (!shared)
-      items.push(
-        h("h3", { text: "Give up this game (concede)" }),
-        h("div", { class: "row" }, [0, 1].map((p) => btn(`${n[p]} gives up`, () => (closeSheet(), act({ t: "concede", who: p })))))
-      );
-    else items.push(btn("Give up this game (concede)", () => (closeSheet(), act({ t: "concede", who: session.seat }))));
+    const giveUp = (p) => () =>
+      confirmSheet(`${n[p]} gives up this game?`, `${n[1 - p]} wins game ${session.match.frames.length}. The scores so far are kept.`, "Give up", () => act({ t: "concede", who: p }));
+    if (!shared) items.push(h("div", { class: "row" }, [0, 1].map((p) => btn(`${n[p]} gives up`, giveUp(p)))));
+    else items.push(btn("Give up this game", giveUp(session.seat)));
   }
-
-  items.push(h("h3", { text: "Restart or reset" }));
   if (!shared) {
     items.push(
       btn("Restart this game", () => confirmSheet("Restart this game?", "Both scores for this game go back to 0 and it starts again from the break. Earlier games are kept.", "Restart game", () => restartLocal(false))),
       btn("Start the match over", () => confirmSheet("Start the match over?", "Every game is cleared and games won go back to 0–0. Same players, same settings.", "Start over", () => restartLocal(true))),
       btn("Delete this match", () => confirmSheet("Delete this match?", "Every game and score on this phone goes, and you're back at the start.", "Delete", () => (deleteLocal(gameOf(session.match)), nav.home())), "btn warn")
     );
+  } else if (other && session.match.frames[session.match.frames.length - 1].ask) {
+    items.push(h("p", { class: "note", text: "There's a restart request on the game screen: answer it there." }));
   } else if (other) {
     const ask = (all) => () => {
       closeSheet();
@@ -61,37 +86,13 @@ export function menuSheet(nav) {
       btn(`Start the match over (asks ${other})`, ask(true))
     );
   }
-
-  items.push(h("h3", { text: "Help" }));
-  items.push(
-    btn("Toss a coin", () => tossSheet({ title: "Coin toss", names: [sideName(session.match, 0), sideName(session.match, 1)] })),
-    btn(ui.setupTitle, () => openSheet(ui.setupTitle, ...ui.setupPicture(session.match))),
-    btn(`${ui.lessonsTitle} (1 minute)`, () => lessonSheet(ui.lessons, ui.lessonsTitle)),
-    btn("Holding and aiming the cue", () => lessonSheet(TECHNIQUE, "Cue technique basics")),
-    btn("Rules & quick answers", () => askSheet()),
-    btn("Show me around the screen", () => (closeSheet(), startTour(tourSteps(ui))))
-  );
-  if (session.match.frames.some((f, i) => i < session.match.frames.length - 1 || s.over)) items.push(btn("Share the score so far", () => shareSoFar(ui)));
-
-  items.push(h("h3", { text: "Sound and look" }), ...settings());
-  if (installWay()) items.push(btn(installPlace === "home" ? "Add to home screen" : "Install the app", installSheet));
-
-  const otherGame = Object.values(GAMES).find((g) => g.id !== ui.id);
-  items.push(
-    btn(`Switch to ${otherGame.label}`, () => {
-      closeSheet();
-      pickGame(otherGame.id);
-      nav.home(); // this match stays saved: "Carry on" on the home screen
-    }),
-    btn(shared ? "Leave this game" : "New game", () => (closeSheet(), nav.home()), "btn ghost")
-  );
   if (shared && session.seat !== null)
     items.push(
       btn("Remove it from this phone", () =>
         confirmSheet("Remove this shared game?", "It's taken off this phone and you lose your seat in it. The other side keeps their copy.", "Remove", () => {
           forgetSeat(session.id);
           nav.home();
-        }), "btn ghost")
+        }), "btn warn")
     );
   openSheet(shared ? "Shared game" : "Game", ...items);
 }

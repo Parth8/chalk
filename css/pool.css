@@ -54,7 +54,7 @@
 .pdot[data-n="8"], .pball[data-n="8"] { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.2); }
 
 .pad.pool-pad { display: flex; flex-direction: column; gap: 10px; }
-.prow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.prow { display: grid; grid-template-columns: repeat(7, 1fr); gap: 9px 6px; }
 .prow.eight-row { grid-template-columns: 1fr; justify-items: center; }
 .pball {
   aspect-ratio: 1;
@@ -67,7 +67,7 @@
 .pball i { width: 52%; height: 52%; font-size: clamp(11px, 3.6vw, 16px); }
 .pball.eight { width: min(64px, 17vw); }
 .pball:active { transform: scale(0.9); }
-.pball.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 5.5px var(--accent), 0 6px 14px rgba(0, 0, 0, 0.25); }
+.pball.on { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent), 0 6px 14px rgba(0, 0, 0, 0.25); }
 .pball.gone { opacity: 0.12; box-shadow: none; }
 .pball:disabled:not(.gone) { opacity: 0.45; }
 .pool-pad .pad-hint { margin-top: 2px; }

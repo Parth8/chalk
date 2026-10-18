@@ -243,17 +243,18 @@ async function act(env, id, body) {
   const s = E.replayFrame(match);
 
   if (e.t === "restart") {
-    // one side asks; the same move from the other side agrees and wipes the frame (or every frame)
-    // `restarts` counts fresh starts, so each phone knows the balls need setting up again
-    if (frame.ask && frame.ask.by !== seat) {
+    // one side asks; the same kind of restart from the other side agrees and wipes the game (or
+    // every game); anything else is a new request. The same rule as restartMove() on the phones.
+    const all = e.all === true;
+    if (frame.ask && frame.ask.by !== seat && !!frame.ask.all === all) {
       const restarts = Math.max(...frames.map((f) => f.restarts || 0)) + 1;
-      if (frame.ask.all) frames.splice(0, frames.length, { breaker: frames[0].breaker, events: [], restarts });
+      if (all) frames.splice(0, frames.length, { breaker: frames[0].breaker, events: [], restarts });
       else {
         frame.events = [];
         frame.restarts = restarts;
         delete frame.ask;
       }
-    } else frame.ask = { by: seat, all: !!e.all };
+    } else frame.ask = { by: seat, all };
   } else if (e.t === "restart-no") {
     if (!frame.ask) throw new ApiError(409, "nothing", "Nobody asked to restart.");
     delete frame.ask;
@@ -278,7 +279,14 @@ async function act(env, id, body) {
     }
     frame.events.push({ ...e, by: seat });
   }
-  await save(env, g, { frames });
+  try {
+    await save(env, g, { frames });
+  } catch (err) {
+    if (err.code !== "stale") throw err;
+    // the other phone saved between our read and our write: send the game as it is now
+    const now = await load(env, id);
+    throw new ApiError(409, "stale", err.message, { v: now.v, game: view(now) });
+  }
   return { v: g.v, game: view(g) };
 }
 
@@ -289,7 +297,7 @@ async function act(env, id, body) {
 function cleanName(raw) {
   const name = String(raw ?? "")
     .normalize("NFC")
-    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f\u202a-\u202e\u2060-\u206f\u2800\u3164\ufe00-\ufe0f\ufeff\uffa0]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!name) throw new ApiError(400, "bad_name", "Type a name first.");
@@ -461,7 +469,11 @@ async function rateLimit(request, env, bucket) {
   }
   b.count += 1;
   buckets.set(key, b);
-  if (buckets.size > 5000) buckets.clear();
+  if (buckets.size > 5000) {
+    // forget windows that have ended, so a flood of new addresses can't reset everyone's count
+    for (const [k, v] of buckets) if (now - v.start > RATE.windowMs) buckets.delete(k);
+    if (buckets.size > 20000) buckets.clear();
+  }
   if (b.count > RATE[bucket]) throw new ApiError(429, "rate_limited", "Too many requests. Give it a minute.");
 }
 

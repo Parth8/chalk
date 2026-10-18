@@ -156,7 +156,7 @@ try {
   });
 
   await step("tapping a colour while on a red asks what happened instead of guessing", async () => {
-    await p.click('#alerts button:has-text("I\'ll play")');
+    await p.click('#alerts button:has-text("plays on")');
     await p.click('.pad [data-ball="green"]');
     assert.match(await p.textContent("#sheet"), /You're on a red/);
     assert.match(await p.textContent("#sheet .verdict"), /Foul: 4 points to Parth/);
@@ -262,6 +262,7 @@ try {
     // finishing a game: "game 2", the other player breaks, set the table again
     await p.click('[data-open="menu"]');
     await p.click('#sheet button:has-text("Rohan gives up")');
+    await p.click('#sheet .btn.warn:has-text("Give up")');
     assert.match(await p.textContent("#guide"), /Parth wins/);
     assert.match(await p.textContent(".players .frames"), /1–0\s*GAMES WON/);
     await p.click('#guide button:has-text("Play game 2 · Rohan breaks")');
@@ -338,11 +339,13 @@ try {
   await step("winning the match: no game after it, and a picture of the result to share", async () => {
     await p.click('[data-open="menu"]');
     await p.click('#sheet button:has-text("Cal & Dev gives up")');
+    await p.click('#sheet .btn.warn:has-text("Give up")');
     assert.match(await p.textContent("#guide"), /Pinks wins/);
     await p.click('#guide button:has-text("Play game 2 · Cal breaks")'); // the other team's turn to break
     await tableReady(p);
     await p.click('[data-open="menu"]');
     await p.click('#sheet button:has-text("Cal & Dev gives up")');
+    await p.click('#sheet .btn.warn:has-text("Give up")');
     assert.match(await p.textContent("#guide"), /Pinks wins the match, 2–0/);
     assert.equal(await p.locator('#guide button:has-text("Play game")').count(), 0);
     const [file] = await Promise.all([p.waitForEvent("download"), p.click('#guide button:has-text("Share the result")')]);

@@ -68,11 +68,12 @@ export function forgetSeat(id) {
   delete all[id];
   store.write(store.KEYS.seats, all);
   store.remove(store.KEYS.outbox + id);
+  store.remove(store.KEYS.view + id);
 }
 
-export function keepSeat(id, seat, token, names) {
+export function keepSeat(id, seat, token, names, kind) {
   const all = seats();
-  all[id] = { seat, token, names, at: Date.now() };
+  all[id] = { seat, token, names, kind, at: Date.now() };
   const recent = Object.entries(all)
     .sort((a, b) => b[1].at - a[1].at)
     .slice(0, 12);

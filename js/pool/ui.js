@@ -14,6 +14,8 @@ import { lessonSheet } from "../core/lessons.js";
 const rival = (g) => (g === "solids" ? "stripes" : "solids");
 const up = (s, p = s.turn) => playerUp(session.match, p); // who's at the table (a player's name in doubles)
 
+const waiting = (me) => (session.seat === null ? `${me} is at the table. Their phone logs the shots, and you'll see them here live.` : `${me} is at the table and logs this visit on their phone. You'll see each shot here live.`);
+
 /** A small numbered ball for lists and chips. */
 export const pdot = (n, cls = "pdot") => h("span", { class: cls, "data-n": String(n), "data-stripe": n > 8 ? "1" : null, "aria-hidden": "true" }, h("i", { text: String(n) }));
 const white = () => h("span", { class: "pdot", "data-n": "0", "aria-hidden": "true" });
@@ -126,8 +128,8 @@ function onCard(s) {
     text = "Say which pocket first. In a different pocket, or with a foul (like the white going in too), and you lose.";
     extra = h("div", { class: "mini big" }, pdot(8));
   }
+  if (isShared() && !can("turn", s)) text = waiting(me); // this phone can't tap: don't tell it to
   const card = h("div", { class: "g-card", style: "--on: var(--accent)" }, h("p", { class: "g-kicker", text: kicker }), h("p", { class: "g-title", text: title }), h("p", { class: "g-text", text }), extra);
-  if (isShared() && !can("turn", s)) card.append(h("p", { class: "g-text", text: session.seat === null ? `${me}'s phone logs this visit.` : `${me} logs this visit on their phone. You'll see it here live.` }));
   if (!s.inHand) return card;
   // (on the break, the words above already say where the white goes)
   if (!s.breakShot) card.append(h("p", { class: "g-text" }, h("b", { text: "Ball in hand: " }), s.inHand === "kitchen" ? "put the white anywhere behind the line at your end." : "put the white anywhere on the table."));
@@ -492,7 +494,8 @@ function rackSheet(key) {
       closeSheet();
       changed();
     }, "btn primary big"),
-    btn("New to pool? How it works", () => lessonSheet(LESSONS, "How 8-ball pool works"), "link")
+    btn("New to pool? How it works", () => lessonSheet(LESSONS, "How 8-ball pool works"), "link"),
+    h("button", { type: "button", class: "link", "data-go": "home" }, "Not now: back to the home screen")
   );
 }
 
@@ -507,7 +510,8 @@ function spotSheet() {
       local.spotDone = evKey();
       closeSheet();
       changed();
-    }, "btn primary big")
+    }, "btn primary big"),
+    can("undo") ? btn("Oops, undo that choice", () => (closeSheet(), act({ t: "undo" })), "link") : null
   );
 }
 

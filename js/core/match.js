@@ -116,6 +116,33 @@ export function playerNext(m, side, i = m.frames.length - 1) {
 }
 
 /**
+ * Restarting in a shared game wipes both scores, so one side asks and the other agrees (with the
+ * same kind of restart). The Worker does exactly this; the phone does it too, to show it at once.
+ */
+export function restartMove(m, e, by) {
+  if (by === null) return m; // on one phone, restarts are restartLocal()
+  const frames = m.frames;
+  const frame = frames[frames.length - 1];
+  if (e.t === "restart-no") {
+    if (!frame.ask) throw new Error("nobody asked to restart");
+    delete frame.ask;
+    return m;
+  }
+  const all = e.all === true;
+  if (frame.ask && frame.ask.by !== by && frame.ask.all === all) {
+    // agreed: `restarts` counts fresh starts, so each phone knows the balls need setting up again
+    const restarts = Math.max(...frames.map((f) => f.restarts || 0)) + 1;
+    if (all) frames.splice(0, frames.length, { breaker: frames[0].breaker, events: [], restarts });
+    else {
+      frame.events = [];
+      frame.restarts = restarts;
+      delete frame.ask;
+    }
+  } else frame.ask = { by, all }; // a new request (or a different one, replacing theirs)
+  return m;
+}
+
+/**
  * The one way a move changes a match, for this phone and (optimistically) for shared games.
  * Returns a new match; throws if the rules don't allow the move here.
  *   by: the seat that made it, stored with shared-game moves
@@ -129,7 +156,7 @@ export function applyMove(m, e, by = null) {
     return next;
   }
   if (e.t === "next") return nextGame(next);
-  if (e.t === "restart" || e.t === "restart-no") return next; // shared games only: the Worker decides
+  if (e.t === "restart" || e.t === "restart-no") return restartMove(next, e, by);
   events.push(by === null ? e : { ...e, by });
   replay(next); // throws if the move doesn't fit
   return next;

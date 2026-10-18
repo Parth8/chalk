@@ -22,7 +22,10 @@ const nav = {
   home: goHome,
   openLocal(m) {
     sync.close();
-    if (location.search) history.pushState(null, "", location.pathname);
+    // a history entry for the game, so the phone's Back button comes home instead of closing the app
+    if (location.search) history.replaceState(null, "", location.pathname);
+    if (history.state?.screen === "local") history.replaceState({ screen: "game" }, "");
+    else if (!history.state?.screen) history.pushState({ screen: "game" }, "");
     openLocal(m); // → route()
   },
   async openShared(id, push = false) {
@@ -55,11 +58,13 @@ function route() {
 }
 
 function goHome() {
+  // came from home by a history entry of ours: step back to it (boot() then shows home)
+  if (history.state?.screen) return history.back();
   closeSheet();
   endTour();
   sync.close();
   leave();
-  if (location.search) history.pushState(null, "", location.pathname);
+  if (location.search) history.replaceState(null, "", location.pathname); // Back shouldn't reopen a game you left
   showHome();
 }
 
@@ -68,6 +73,11 @@ function boot() {
   endTour();
   const id = new URLSearchParams(location.search).get("g");
   if (id && /^[a-z2-9]{10}$/.test(id)) return nav.openShared(id);
+  if (id !== null) {
+    show("join");
+    return renderJoinError({ code: "no_game", message: "That game link doesn't look right. Check it was copied in full, or ask for it again." }, null, () => (goHome(), $("#start-local").click()));
+  }
+  if (history.state?.screen) history.replaceState(null, ""); // came Back from a game or the names screen
   sync.close();
   leave();
   if (!pickedGame()) {

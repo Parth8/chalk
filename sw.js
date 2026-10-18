@@ -3,7 +3,7 @@
 // already have the app swap the whole cache at once instead of file by file.
 // tests/sw.test.mjs checks that FILES lists every script and stylesheet.
 
-const VERSION = "chalk-v8";
+const VERSION = "chalk-v9";
 const FILES = [
   "./",
   "index.html",
@@ -69,13 +69,20 @@ self.addEventListener("activate", (e) => {
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
-  const key = e.request.mode === "navigate" ? "index.html" : e.request;
+  const scope = new URL(self.registration.scope);
+  const navigate = e.request.mode === "navigate";
+  // the app itself (with or without ?g=…) is served from the cached index.html; any other page
+  // opened directly (an icon, the manifest) goes to the network and is never saved as the app
+  const isApp = navigate && (url.pathname === scope.pathname || url.pathname === `${scope.pathname}index.html`);
+  if (navigate && !isApp) return;
+  const key = isApp ? "index.html" : e.request;
   e.respondWith(
     caches.open(VERSION).then(async (cache) => {
-      const hit = await cache.match(key, { ignoreSearch: e.request.mode === "navigate" });
-      const fresh = fetch(e.request)
+      const hit = await cache.match(key, { ignoreSearch: isApp });
+      const fresh = fetch(e.request, { cache: "no-cache" })
         .then((res) => {
-          if (res.ok && res.type === "basic") cache.put(key, res.clone());
+          const page = !isApp || (res.headers.get("content-type") || "").includes("text/html");
+          if (res.ok && res.type === "basic" && page) cache.put(key, res.clone());
           return res;
         })
         .catch(() => hit);

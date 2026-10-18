@@ -11,17 +11,28 @@ export function show(view) {
 export const showing = (view) => !$(`#view-${view}`).hidden;
 
 let lock = null;
+let wanted = false;
+let asking = false;
 async function wake(on) {
+  wanted = on;
+  if (!on) {
+    const held = lock;
+    lock = null;
+    held?.release().catch(() => {});
+    return;
+  }
+  if (lock || asking || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+  asking = true;
   try {
-    if (on && !lock && "wakeLock" in navigator && document.visibilityState === "visible") {
-      lock = await navigator.wakeLock.request("screen");
-      lock.addEventListener("release", () => (lock = null));
-    } else if (!on && lock) {
-      await lock.release();
-      lock = null;
+    const held = await navigator.wakeLock.request("screen");
+    if (!wanted) held.release().catch(() => {}); // left the game while asking
+    else {
+      lock = held;
+      held.addEventListener("release", () => lock === held && (lock = null));
     }
   } catch {
-    lock = null;
+  } finally {
+    asking = false;
   }
 }
 

@@ -12,6 +12,9 @@ import { lessonSheet } from "../core/lessons.js";
 import { playerUp, playerNext } from "../core/match.js";
 import { tossSheet } from "../core/toss.js";
 
+/** The coloured edge of a card for a ball (the black's edge would vanish on the dark theme). */
+const accent = (ball) => (ball === "black" ? "var(--on-black)" : `var(--${ball || "accent"})`);
+const waiting = (me) => (session.seat === null ? `${me} is at the table. Their phone logs the shots, and you'll see them here live.` : `${me} is at the table and logs this visit on their phone. You'll see each shot here live.`);
 const dot = (ball, cls = "dot") => h("span", { class: cls, "data-ball": ball, "aria-hidden": "true" });
 const up = (s) => playerUp(session.match, s.turn); // who's at the table (a player's name in doubles)
 const nextUp = (side) => playerNext(session.match, side); // who comes in next for a side
@@ -66,7 +69,7 @@ function guide(s) {
     const card = cardWithPicture(
       h(
         "div",
-        { class: "g-card", style: "--on: var(--black)", "data-key": `toss-${evKey()}` },
+        { class: "g-card", style: `--on: ${accent("black")}`, "data-key": `toss-${evKey()}` },
         h("p", { class: "g-kicker", text: `Level at ${s.scores[0]}` }),
         h("p", { class: "g-title", text: "Re-spotted black" }),
         h("p", { class: "g-text", text: "Black back on its spot. Toss a coin: the winner picks who plays, with the white in hand in the D. Next score or foul wins." })
@@ -109,16 +112,16 @@ function foulCard(s, n) {
       ? h(
           "div",
           { class: "row" },
-          btn("I'll play", () => {
+          btn(`${inc} plays on`, () => {
             local.foulDone = evKey();
             changed();
           }, "btn primary"),
           btn(`${off} plays again`, () => act({ t: "again" })),
           btn("Free ball (I'm snookered)", freeBallSheet),
-          s.foul.missable ? btn("Put balls back (miss)", () => missSheet(off)) : null
+          s.foul.missable ? btn("Put the balls back (a miss)", () => missSheet(off)) : null
         )
       : h("p", { class: "g-text", text: `${inc} decides: play on, make ${off} play again, or take a free ball if snookered.` }),
-    can("turn", s) ? h("p", { class: "note", text: "Not sure? Tap I'll play: that's the usual choice." }) : null
+    can("turn", s) ? h("p", { class: "note", text: `Not sure? Tap "${inc} plays on": that's the usual choice.` }) : null
   );
 }
 
@@ -151,8 +154,8 @@ function onCard(s, me) {
     text = "Colours in order now. They stay down.";
     extra = h("div", { class: "seq", "aria-hidden": "true" }, COLOURS.map((c, i) => dot(c, `dot${i < s.next ? " done" : i === s.next ? " now" : ""}`)));
   }
-  const card = h("div", { class: "g-card", style: `--on: var(--${on || "accent"})` }, h("p", { class: "g-kicker", text: kicker }), h("p", { class: "g-title", text: title }), h("p", { class: "g-text", text }), extra);
-  if (isShared() && !can("turn", s)) card.append(h("p", { class: "g-text", text: session.seat === null ? `${me}'s phone logs this visit.` : `${me} logs this visit on their phone. You'll see it here live.` }));
+  if (isShared() && !can("turn", s)) text = waiting(me); // this phone can't tap: don't tell it to
+  const card = h("div", { class: "g-card", style: `--on: ${accent(on)}` }, h("p", { class: "g-kicker", text: kicker }), h("p", { class: "g-title", text: title }), h("p", { class: "g-text", text }), extra);
   if (!s.inHand) return card;
   // white in hand: show the D right there, next to what's on
   if (eventsNow().length) card.append(h("p", { class: "g-text" }, h("b", { text: "White in hand: " }), "anywhere inside the D or on its lines, then play in any direction."));
@@ -166,7 +169,7 @@ function spotCard(s) {
   const ball = s.toSpot[0];
   const card = h(
     "div",
-    { class: "g-card", style: `--on: var(--${ball})`, "data-key": `spot-${evKey()}` },
+    { class: "g-card", style: `--on: ${accent(ball)}`, "data-key": `spot-${evKey()}` },
     h("p", { class: "g-kicker", text: s.toSpot.length > 1 ? `Then: ${s.toSpot.slice(1).join(", ")}` : "Re-spot" }),
     h("p", { class: "g-title", text: `Put the ${ball} back` }),
     h("p", { class: "g-text", text: `On its own spot: ${SPOT_WORDS[ball]}.` })
@@ -369,16 +372,29 @@ function verdict(s, shot, me, opp) {
     }, `btn big ${cls}`);
   if (r.result === "pot") return h("div", { class: "verdict ok" }, h("p", { class: "v-title", text: `Fair pot: +${r.pts} to ${me}` }), go(`Add ${r.pts} to ${me}`, "primary"));
   if (r.result === "miss") return h("div", { class: "verdict miss" }, h("p", { class: "v-title", text: "Not a foul" }), h("p", { text: `${r.reasons[0]} ${opp}'s turn.` }), go(`Missed: ${opp}'s turn`, ""));
-  const after = [shot.white ? `${opp} puts the white anywhere in the D` : `${opp} plays from where the white stopped (not ball in hand)`];
-  if (shot.reds) after.push(`${shot.reds === 1 ? "the red stays" : "the reds stay"} down`);
-  if (shot.colours.size) after.push(`the ${[...shot.colours].join(" and ")} go${shot.colours.size === 1 ? "es" : ""} back on ${shot.colours.size === 1 ? "its spot" : "their spots"}`);
+  const side = names()[1 - s.turn]; // the points go to the other side
+  let then;
+  let label = `Give ${r.pen} to ${side}`;
+  if (s.phase === "clear" && s.next === 5) {
+    // a foul with only the black left ends the game (or, if that leaves it level, a re-spotted black)
+    const sc = s.scores.slice();
+    sc[1 - s.turn] += r.pen;
+    const w = sc[0] > sc[1] ? 0 : 1;
+    then = sc[0] === sc[1] ? "That leaves the scores level: a re-spotted black decides it." : `That ends the game: ${names()[w]} wins ${sc[w]}–${sc[1 - w]}.`;
+    if (sc[0] !== sc[1]) label += " and end the game";
+  } else {
+    const after = [shot.white ? `${opp} puts the white anywhere in the D` : `${opp} plays from where the white stopped (not ball in hand)`];
+    if (shot.reds) after.push(`${shot.reds === 1 ? "the red stays" : "the reds stay"} down`);
+    if (shot.colours.size) after.push(`the ${[...shot.colours].join(" and ")} go${shot.colours.size === 1 ? "es" : ""} back on ${shot.colours.size === 1 ? "its spot" : "their spots"}`);
+    then = `Then ${after.join(", ")}.`;
+  }
   return h(
     "div",
     { class: "verdict foul" },
-    h("p", { class: "v-title", text: `Foul: ${r.pen} points to ${opp}` }),
+    h("p", { class: "v-title", text: `Foul: ${r.pen} points to ${side}` }),
     h("ul", { class: "reasons" }, r.reasons.map((x) => h("li", { text: x }))),
-    h("p", { text: `Worth ${r.pen} because ${r.why}. Then ${after.join(", ")}.` }),
-    go(`Give ${r.pen} to ${opp}`, "warn")
+    h("p", { text: `Worth ${r.pen} because ${r.why}. ${then}` }),
+    go(label, "warn")
   );
 }
 
@@ -420,7 +436,8 @@ function setupSheet(key) {
       closeSheet();
       changed();
     }, "btn primary big"),
-    btn("New to snooker? How it works", () => lessonSheet(LESSONS, "How snooker works"), "link")
+    btn("New to snooker? How it works", () => lessonSheet(LESSONS, "How snooker works"), "link"),
+    h("button", { type: "button", class: "link", "data-go": "home" }, "Not now: back to the home screen")
   );
 }
 
@@ -466,6 +483,12 @@ function spotSheet(s) {
           local.spot.fall++;
           spotSheet(state());
         }, "btn"),
+    local.spot.fall
+      ? btn("Back: that spot was free", () => {
+          local.spot.fall--;
+          spotSheet(state());
+        }, "link")
+      : null,
     can("undo", s)
       ? btn(s.foul ? "Oops, undo that shot" : `Oops, the ${ball} didn't go in (undo)`, () => {
           closeSheet();
@@ -519,7 +542,7 @@ const undoLabel = (e) => (e.t === "pot" ? `the ${e.ball}` : e.t === "call" ? `${
 function result(s) {
   const n = names();
   return {
-    score: `${s.scores[s.winner]}–${s.scores[1 - s.winner]}`,
+    score: s.conceded !== null && !s.scores[0] && !s.scores[1] ? null : `${s.scores[s.winner]}–${s.scores[1 - s.winner]}`,
     line: s.conceded !== null ? `${n[s.conceded]} gave up this game.` : `Highest breaks: ${n[0]} ${s.best[0]}, ${n[1]} ${s.best[1]}.`,
     note: `Snooker players call one game a "frame".`,
   };
@@ -538,7 +561,7 @@ function announce(s) {
 
 const LESSONS = [
   ["The idea", () => [h("p", {}, "Take turns hitting the ", h("b", { text: "white ball" }), " with your cue to knock the coloured balls into the pockets (", h("b", { text: "potting" }), "). Each ball you pot scores points. More points when the table's cleared wins the game.")]],
-  ["What each ball is worth", () => [h("div", { class: "balls-row" }, BALLS.map((b) => h("span", { class: "v" }, dot(b), String(VALUE[b])))), h("p", {}, "There are 15 reds (1 point each) and six colours. You only ever hit the white with the cue.")]],
+  ["What each ball is worth", () => [h("div", { class: "balls-row" }, BALLS.map((b) => h("span", { class: "v" }, dot(b), String(VALUE[b])))), h("p", {}, `There are ${session.match?.reds || 15} reds (1 point each) and six colours. You only ever hit the white with the cue.`)]],
   ["Your turn", () => [h("p", {}, "Your turn lasts as long as you keep potting. Miss, and it's the other player's turn. The points you score in one turn are your ", h("b", { text: "break" }), ".")]],
   [
     "The order",
