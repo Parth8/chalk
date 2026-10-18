@@ -104,6 +104,13 @@ export function judge(s, shot) {
 
   if (s.breakShot) {
     const fouled = white || !!other;
+    if (potted.includes(8) && other === "off") {
+      // the 8 driven off the table on the break: it's spotted, and the incoming player takes the
+      // table as it lies or the white behind the line (WPA 4.3(g), 4.7)
+      reasons.push("The 8 left the table on the break. It isn't a loss: it goes back on the foot spot.");
+      if (white) reasons.push("The white went in (or off the table) too.");
+      return { result: "choice", choice: "eight-off-break", reasons };
+    }
     if (potted.includes(8)) {
       if (fouled) {
         if (white) reasons.push("The white went in (or off the table).");
@@ -113,8 +120,10 @@ export function judge(s, shot) {
       }
       return { result: "choice", choice: "eight-break", reasons: ["The 8 went in on the break. That's not a foul and not a loss."] };
     }
-    if (!potted.length && !shot.rail && !white) {
+    if (!potted.length && !shot.rail) {
+      // decided before a scratch: a scratch doesn't make an illegal break legal (WPA 4.3(d))
       reasons.push("Nothing went in and fewer than 4 balls hit a cushion: an illegal break.");
+      if (white) reasons.push("The white went in too, so if the table is played as it lies, the white goes behind the line.");
       if (other) reasons.push(`${OTHER_FOULS[other]}.`);
       return { result: "choice", choice: "illegal-break", reasons };
     }
@@ -131,6 +140,8 @@ export function judge(s, shot) {
   const can = targets(s);
   const g = groupFor(s, shooter);
   const first = shot.first ?? "nothing";
+  // open table with a whole group already down: you may claim it for now and play the 8 (WPA 4.4)
+  const onEightOpen = !g && first === 8 && can.includes(8);
   if (other) reasons.push(`${OTHER_FOULS[other]}.`);
   if (first === "nothing") reasons.push("The white didn't hit any ball.");
   else if (!can.includes(first)) {
@@ -145,14 +156,17 @@ export function judge(s, shot) {
     const eightOn = can.includes(8);
     if (other === "off") return { result: "loss", reasons: [...reasons, "The 8 left the table."], how: "drove the 8 off the table" };
     if (reasons.length) return { result: "loss", reasons: [...reasons, "The 8 went in on a foul."], how: "potted the 8 on a foul" };
-    if (!eightOn) return { result: "loss", reasons: [`The 8 went in before ${g ? `all the ${g}` : "a group"} ${g ? "were" : "was"} down.`], how: "potted the 8 too early" };
+    if (!eightOn || (!g && !onEightOpen)) return { result: "loss", reasons: [`The 8 went in before ${g ? `all the ${g}` : "a group"} ${g ? "were" : "was"} down.`], how: "potted the 8 too early" };
     if (potted.some((n) => n !== 8 && groupOf(n) === g)) return { result: "loss", reasons: ["The 8 went in on the same shot as one of your own balls. It has to be the last ball you pot."], how: "potted the 8 too early" };
+    if (shot.safety) return { result: "loss", reasons: ["You called safety, so no pocket was called for the 8."], how: "potted the 8 on a safety" };
     if (shot.eight !== "called") return { result: "loss", reasons: ["The 8 went in a pocket you didn't call."], how: "potted the 8 in the wrong pocket" };
     return { result: "win", reasons: ["The 8 went in the pocket you called."], how: "potted the 8" };
   }
   if (reasons.length) return { result: "foul", reasons };
 
   if (!potted.length) return { result: "pass", reasons: ["A fair shot: the white hit the right ball first and a ball touched a cushion. Nothing went in, so it's the other player's turn."] };
+  if (shot.uncalled) return { result: "pass", reasons: [`The ball you called didn't go in, so your turn ends. ${potted.length > 1 ? "The balls" : "The ball"} that went in stay${potted.length > 1 ? "" : "s"} down${g ? "" : ", and the table stays open"}.`] };
+  if (onEightOpen) return { result: "pass", reasons: ["You played the 8 (your group is down), and it didn't go in, so the turn passes. The table stays open."] };
   if (!g) {
     // open table: the called ball decides the groups
     const groupsIn = [...new Set(potted.map(groupOf))];
@@ -185,6 +199,7 @@ const OPTIONS = {
   "eight-break": ["spot8", "rebreak"],
   "eight-break-foul": ["spot8", "rebreak"],
   "break-foul": ["accept", "kitchen"],
+  "eight-off-break": ["accept", "kitchen"],
 };
 export const optionsFor = (s) => (s.choice ? OPTIONS[s.choice.kind] : []);
 
@@ -222,19 +237,23 @@ export function apply(prev, e) {
       } else if (r.result === "choice") {
         s.run = 0;
         const breakerDecides = r.choice === "eight-break";
-        s.choice = { kind: r.choice, by: breakerDecides ? p : 1 - p, breaker: p };
+        s.choice = { kind: r.choice, by: breakerDecides ? p : 1 - p, breaker: p, ...(e.white ? { white: true } : {}) };
         s.turn = s.choice.by;
       }
       return s;
     }
     case "choose": {
       if (!s.choice || !optionsFor(s).includes(e.opt)) throw new Error("nothing to choose");
-      const { kind, by, breaker } = s.choice;
+      const { kind, by, breaker, white } = s.choice;
       s.choice = null;
       s.log.push({ t: "choose", p: by, opt: e.opt, kind });
+      if (kind === "eight-off-break") {
+        s.table = [...s.table, 8].sort((a, b) => a - b);
+        s.spot8 = true;
+      }
       if (e.opt === "accept") {
         s.turn = by;
-        s.inHand = null;
+        s.inHand = white ? "kitchen" : null; // the white went in: it comes out behind the line
       } else if (e.opt === "kitchen") {
         s.turn = by;
         s.inHand = "kitchen";

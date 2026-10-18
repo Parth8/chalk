@@ -77,3 +77,12 @@ test("doubles: partners take turns at the table, and each game starts one player
 test("team names are tidied", () => {
   assert.deepEqual(cleanTeam(["  Ann  ", "", "Bea   Lee", null, "x".repeat(40), "E"]), ["Ann", "Bea Lee", "x".repeat(24), "E"]);
 });
+
+test("doubles in pool: 'make them break again' gives the break back to the same player", () => {
+  let m = createMatch({ game: "pool", players: ["A", "B"], teams: [["Ann", "Cal"], ["Bea", "Dev"]], breaker: 0 });
+  m = applyMove(m, { t: "shot", potted: [], rail: false }); // illegal break: Bea chooses
+  assert.equal(playerUp(m, replay(m).turn), "Bea");
+  m = applyMove(m, { t: "choose", opt: "rerack-them" });
+  assert.equal(playerUp(m, replay(m).turn), "Ann", "Ann broke, Ann breaks again");
+  assert.deepEqual(visits(m), [1, 0]);
+});

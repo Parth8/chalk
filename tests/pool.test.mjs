@@ -203,3 +203,53 @@ test("illegal pots aren't possible: unknown balls ignored, nothing after the rac
   assert.throws(() => apply(w, shot({ first: 9 })));
   assert.throws(() => apply(w, { t: "choose", opt: "accept" }));
 });
+
+test("a scratch on an illegal break is still an illegal break; played as it lies, the white comes out behind the line", () => {
+  const s = apply(fresh(), shot({ potted: [], white: true, rail: false }));
+  assert.equal(s.choice.kind, "illegal-break");
+  assert.equal(s.turn, 1, "the other player chooses");
+  const accepted = apply(s, { t: "choose", opt: "accept" });
+  assert.equal(accepted.inHand, "kitchen");
+  assert.equal(apply(apply(fresh(), shot({ potted: [], rail: false })), { t: "choose", opt: "accept" }).inHand, null, "no scratch: as the white lies");
+});
+
+test("the 8 flying off on the break: spotted, and the incoming player takes the table or the white behind the line", () => {
+  const s = apply(fresh(), shot({ potted: [8], other: "off" }));
+  assert.equal(s.choice.kind, "eight-off-break");
+  assert.deepEqual(optionsFor(s), ["accept", "kitchen"]);
+  const k = apply(s, { t: "choose", opt: "kitchen" });
+  assert.ok(k.table.includes(8));
+  assert.equal(k.spot8, true);
+  assert.equal(k.inHand, "kitchen");
+  assert.equal(k.turn, 1);
+});
+
+test("on the 8 with safety called: potting it loses (no pocket was called)", () => {
+  let s = run(opened(), shot({ first: 9, potted: [9] }));
+  s = run(s, shot({ first: 10, potted: [10, 11, 12, 13, 14, 15] }));
+  assert.deepEqual(targets(s), [8]);
+  assert.equal(judge(s, { first: 8, potted: [8], rail: true, eight: "called" }).result, "win");
+  assert.equal(judge(s, { first: 8, potted: [8], rail: true, eight: "called", safety: true }).result, "loss");
+});
+
+test("open table with a group cleared: you may play the 8, but potting it off another ball loses", () => {
+  let s = apply(fresh(), shot({ potted: [1, 2, 3] }));
+  s = run(s, shot({ first: 4, potted: [4, 5], safety: true }), shot({ first: 6, potted: [6, 7], safety: true }));
+  assert.equal(s.groups, null);
+  assert.ok(targets(s).includes(8));
+  assert.equal(judge(s, { first: 9, potted: [8], rail: true, eight: "called" }).result, "loss", "hit a stripe first, the 8 dropped");
+  assert.equal(judge(s, { first: 8, potted: [8], rail: true, eight: "called" }).result, "win");
+  const r = judge(s, { first: 8, potted: [9], rail: true });
+  assert.equal(r.result, "pass", "played the 8, a stripe went in: not stripes, the turn passes");
+  assert.equal(r.assign, undefined);
+});
+
+test("a ball went in but not the one called: no foul, the turn ends, the table stays open", () => {
+  const s = opened();
+  const r = judge(s, { first: 3, potted: [5], rail: true, uncalled: true });
+  assert.equal(r.result, "pass");
+  const after = apply(s, shot({ first: 3, potted: [5], uncalled: true }));
+  assert.equal(after.groups, null);
+  assert.equal(after.turn, 0);
+  assert.ok(!after.table.includes(5), "it stays down");
+});

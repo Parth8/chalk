@@ -71,7 +71,9 @@ export function visits(m, i = m.frames.length - 1) {
     const before = s.turn;
     s = E.apply(s, e);
     if (s.turn === before) continue;
-    if (e.t === "again" || e.t === "replace") count[before]--;
+    // made to play again, or (pool) a choice that hands the break back: the same player carries on,
+    // and the side that chose didn't have a visit
+    if (e.t === "again" || e.t === "replace" || e.t === "choose") count[before]--;
     else count[s.turn]++;
   }
   return count;

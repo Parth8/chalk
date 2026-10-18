@@ -2,7 +2,7 @@
 // choices after it, "What happened?", racking and putting the 8 back. The shared game screen
 // (screens/game.js) calls these through the interface at the bottom, the same one snooker has.
 
-import { SOLIDS, STRIPES, ALL, groupOf, groupFor, left, targets, judge, optionsFor, OTHER_FOULS, GROUP_WORDS } from "./engine.js";
+import { SOLIDS, STRIPES, ALL, groupOf, groupFor, left, targets, judge, optionsFor, replayFrame, OTHER_FOULS, GROUP_WORDS } from "./engine.js";
 import * as rules from "./rules.js";
 import { poolSVG } from "./table.js";
 import { h, btn, toast, cardWithPicture } from "../core/dom.js";
@@ -48,23 +48,32 @@ function standingLine(s) {
 /* ---------------- what's on, the choices after a break, ball in hand ---------------- */
 
 const CHOICE = {
-  title: { "illegal-break": "Illegal break", "eight-break": "The 8 went in on the break", "eight-break-foul": "The 8 went in, with a foul", "break-foul": "Foul on the break" },
-  text: {
-    "illegal-break": (who) => `Nothing went in and fewer than 4 balls hit a cushion. ${who} chooses what happens:`,
-    "eight-break": (who) => `That's not a loss. ${who} chooses:`,
-    "eight-break-foul": (who) => `It isn't a loss on the break. ${who} chooses:`,
-    "break-foul": (who) => `${who} chooses:`,
+  title: {
+    "illegal-break": "Illegal break",
+    "eight-break": "The 8 went in on the break",
+    "eight-break-foul": "The 8 went in, with a foul",
+    "break-foul": "Foul on the break",
+    "eight-off-break": "The 8 flew off on the break",
+  },
+  /** what happened, in a sentence */
+  why: {
+    "illegal-break": "Nothing went in and fewer than 4 balls hit a cushion.",
+    "eight-break": "That's not a loss.",
+    "eight-break-foul": "It isn't a loss on the break.",
+    "break-foul": "The break was a foul.",
+    "eight-off-break": "It isn't a loss: the 8 goes back on the foot spot.",
   },
 };
 
 function choiceLabel(opt, kind, chooser, breaker) {
+  if (kind === "eight-off-break" && opt === "accept") return "Put the 8 back, play the table as it is";
   return {
     accept: "Play the table as it is",
     "rerack-me": `Re-rack, ${chooser} breaks`,
     "rerack-them": `Re-rack, ${breaker} breaks again`,
     spot8: kind === "eight-break" ? "Put the 8 back and carry on" : `Put the 8 back, ${chooser} plays from behind the line`,
     rebreak: `Re-rack, ${chooser} breaks`,
-    kitchen: "Take the white behind the line",
+    kitchen: kind === "eight-off-break" ? "Put the 8 back, white behind the line" : "Take the white behind the line",
   }[opt];
 }
 
@@ -77,14 +86,14 @@ function guide(s) {
   if (s.choice) {
     const { kind, by, breaker } = s.choice;
     const who = up(s, by);
-    const text = CHOICE.text[kind](who);
+    const text = canChoose(s) ? `${CHOICE.why[kind]} ${who} chooses what happens:` : `${CHOICE.why[kind]} Waiting for ${who} to choose on their phone.`;
     cards.push(
       h(
         "div",
         { class: "g-card foul", "data-key": `choice-${evKey()}` },
         h("p", { class: "g-kicker", text: `Game ${frameNo()}` }),
         h("p", { class: "g-title", text: CHOICE.title[kind] }),
-        h("p", { class: "g-text", text: canChoose(s) ? text : `${text.split(".")[0]}. Waiting for ${who} to choose on their phone.` }),
+        h("p", { class: "g-text", text }),
         canChoose(s) ? h("div", { class: "choices" }, optionsFor(s).map((o) => btn(choiceLabel(o, kind, who, up(s, breaker)), () => act({ t: "choose", opt: o }), "btn"))) : null
       )
     );
@@ -159,11 +168,44 @@ function padHint(s) {
   return `One of your ${g} went in? Tap it. Nothing went in? Missed.`;
 }
 
-/** A tap on a ball: one of yours (or any but the 8 on an open table) went in fairly. */
+/**
+ * A tap on a ball: one of yours (or any but the 8 on an open table) went in fairly. Each tap is
+ * its own shot, so when a ball that changes the ruling (the 8, or one of theirs) is tapped right
+ * after one of yours went in, first ask whether they went in on the same shot.
+ */
 function onBall(n) {
   const s = state();
   if (!can("turn", s) || !s.table.includes(n)) return;
   if (s.breakShot) return breakSheet([n]);
+  const last = s.log[s.log.length - 1];
+  const g0 = groupFor(s, s.turn);
+  const plain = n !== 8 && (!g0 || groupOf(n) === g0);
+  const prev = eventsNow()[eventsNow().length - 1];
+  if (!plain && last && last.t === "shot" && last.p === s.turn && last.result === "continue" && !last.brk && last.potted.length && prev?.t === "shot") {
+    return sameShotSheet(n, prev, last.potted);
+  }
+  tapped(n);
+}
+
+function sameShotSheet(n, prev, before) {
+  const balls = words(before);
+  openSheet(
+    `The ${n} went in`,
+    h("p", { class: "lead-text" }, "Did it go in on the ", h("b", { text: "same shot" }), ` as the ${balls}, or on a new shot?`),
+    h("p", { class: "note", text: "It matters: for example the 8 going in with your last ball loses, and one of theirs going in with one of yours doesn't end your turn." }),
+    // describe the whole shot instead; confirming it replaces the shot logged a moment ago
+    btn(`Same shot as the ${balls}`, () => shotSheet({ first: prev.first, potted: [...before, n] }, `One shot: the ${words([...before, n])} went in. Check the rest and I'll rule on it.`, { replaceLast: true }), "btn primary big"),
+    btn("A new shot", () => {
+      closeSheet();
+      tapped(n);
+    }, "btn big")
+  );
+}
+
+const words = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}` : String(list[0]));
+
+function tapped(n) {
+  const s = state();
   const g = groupFor(s, s.turn);
   if (n === 8) {
     if (!targets(s).includes(8)) return shotSheet({ potted: [8] }, `The 8 isn't yours to pot yet (you're on ${onWords(s)}). What happened?`);
@@ -227,7 +269,7 @@ function breakSheet(prefill = []) {
     const parts = [h("p", { class: "lead-text", text: `${up(s)} broke. Tell me what happened and I'll rule on it.` })];
     const none = !shot.potted.size && !shot.white;
     parts.push(
-      h("h3", { text: "1. What went in? (or flew off the table)" }),
+      h("h3", { text: "1. What went in?" }),
       h(
         "div",
         { class: "chips" },
@@ -240,6 +282,7 @@ function breakSheet(prefill = []) {
         ALL.filter((x) => s.table.includes(x)).map((x) => chip("", shot.potted.has(x), () => (shot.potted.has(x) ? shot.potted.delete(x) : shot.potted.add(x), draw()), pdot(x, "pdot big")))
       )
     );
+    parts.push(offRow(shot, draw));
     if (!shot.potted.size)
       parts.push(
         h("h3", { text: "2. Did at least 4 balls hit a cushion?" }),
@@ -254,9 +297,21 @@ function breakSheet(prefill = []) {
   openSheet("The break", body);
 }
 
-/** Any other shot: first contact (by group), what went in, a cushion, the 8's pocket. */
-function shotSheet(prefill = {}, intro = "") {
-  const s = state();
+/** The game as it was before the last move (to rule on it again as part of a bigger shot). */
+function stateBeforeLast() {
+  const m = session.match;
+  const frames = m.frames.slice();
+  const i = frames.length - 1;
+  frames[i] = { ...frames[i], events: frames[i].events.slice(0, -1) };
+  return replayFrame({ ...m, frames });
+}
+
+/**
+ * Any other shot: first contact (by group), what went in, a cushion, the 8's pocket.
+ * replaceLast: the shot includes the one logged just before, which this one replaces.
+ */
+function shotSheet(prefill = {}, intro = "", { replaceLast = false } = {}) {
+  const s = replaceLast ? stateBeforeLast() : state();
   const g = groupFor(s, s.turn);
   const ok = targets(s);
   const on = (x) => s.table.includes(x);
@@ -276,6 +331,7 @@ function shotSheet(prefill = {}, intro = "") {
     called: null,
     other: null,
     safety: false,
+    uncalled: false,
   };
   const body = h("div", { class: "shot" });
   const draw = () => {
@@ -291,7 +347,7 @@ function shotSheet(prefill = {}, intro = "") {
     );
     const none = !shot.potted.size && !shot.white;
     parts.push(
-      h("h3", { text: "2. What went in? (or flew off the table)" }),
+      h("h3", { text: "2. What went in?" }),
       h(
         "div",
         { class: "chips" },
@@ -304,12 +360,13 @@ function shotSheet(prefill = {}, intro = "") {
         ALL.filter(on).map((x) => chip("", shot.potted.has(x), () => (shot.potted.has(x) ? shot.potted.delete(x) : shot.potted.add(x), draw()), pdot(x, "pdot big")))
       )
     );
+    parts.push(offRow(shot, draw));
     if (!shot.potted.size && shot.first !== "nothing")
       parts.push(
         h("h3", { text: "3. After that, did any ball touch a cushion?" }),
         h("div", { class: "chips" }, chip("Yes", shot.rail, () => ((shot.rail = true), draw())), chip("No, nothing did", !shot.rail, () => ((shot.rail = false), draw())))
       );
-    if (shot.potted.has(8) && ok.includes(8))
+    if (shot.potted.has(8) && ok.includes(8) && !shot.safety && shot.other !== "off")
       parts.push(
         h("h3", { text: "Did the 8 go in the pocket you called?" }),
         h("div", { class: "chips" }, chip("Yes", shot.eight === "called", () => ((shot.eight = "called"), draw())), chip("No, another pocket", shot.eight === "wrong", () => ((shot.eight = "wrong"), draw())))
@@ -324,29 +381,47 @@ function shotSheet(prefill = {}, intro = "") {
 
     const list = kinds.find(([k]) => k === shot.first)?.[2] || [8];
     const firstBall = shot.first === "nothing" ? "nothing" : (list.find((x) => ok.includes(x)) ?? list[0]);
-    const e = clean({ t: "shot", first: firstBall, potted: [...shot.potted], white: shot.white, rail: shot.rail, other: shot.other, eight: shot.potted.has(8) ? shot.eight : undefined, safety: shot.safety, called: shot.called });
+    const e = clean({ t: "shot", first: firstBall, potted: [...shot.potted], white: shot.white, rail: shot.rail, other: shot.other, eight: shot.potted.has(8) ? shot.eight : undefined, safety: shot.safety, called: shot.called, uncalled: shot.uncalled });
     const r = judge(s, e);
-    parts.push(r.needCalled ? h("div", { class: "verdict" }, h("p", { text: "Pick the ball you'd called." })) : verdictBox(s, r, [e]));
+    parts.push(r.needCalled ? h("div", { class: "verdict" }, h("p", { text: "Pick the ball you'd called." })) : verdictBox(s, r, replaceLast ? [{ t: "undo" }, e] : [e]));
     body.replaceChildren(...parts);
   };
   draw();
   openSheet("What happened?", body);
 }
 
+/** A ball off the table is a foul (the 8 off loses), not a pot: asked on its own so it isn't missed. */
+function offRow(shot, draw) {
+  return h(
+    "div",
+    { class: "off-row" },
+    h("h3", { text: "Did a numbered ball jump off the table?" }),
+    h(
+      "div",
+      { class: "chips" },
+      chip("No", shot.other !== "off", () => (shot.other === "off" && (shot.other = null), draw())),
+      chip("Yes (tick it above too)", shot.other === "off", () => ((shot.other = "off"), draw()))
+    )
+  );
+}
+
+/** "Anything else?": the less common fouls, safety, and a called ball that didn't drop. */
 function moreFouls(s, shot, draw, safety = false) {
-  const list = Object.entries(OTHER_FOULS).filter(([k]) => k !== "placement" || s.inHand === "kitchen");
+  const list = Object.entries(OTHER_FOULS).filter(([k]) => k !== "off" && (k !== "placement" || s.inHand === "kitchen"));
+  const said = shot.other && shot.other !== "off" ? `Also: ${OTHER_FOULS[shot.other].toLowerCase()}` : shot.safety ? "Also: called safety" : shot.uncalled ? "Also: the called ball didn't go in" : "Anything else? (touched a ball, double hit, safety…)";
   const d = h(
     "details",
     { class: "more" },
-    h("summary", { text: shot.other ? `Also: ${OTHER_FOULS[shot.other].toLowerCase()}` : shot.safety ? "Also: called safety" : "Anything else? (touched a ball, double hit, safety…)" }),
+    h("summary", { text: said }),
     h(
       "div",
       { class: "choices" },
       list.map(([k, label]) => h("button", { type: "button", class: "choice", "aria-pressed": String(shot.other === k), on: { click: () => ((shot.other = shot.other === k ? null : k), draw()) } }, label)),
-      safety ? h("button", { type: "button", class: "choice safe", "aria-pressed": String(shot.safety), on: { click: () => ((shot.safety = !shot.safety), draw()) } }, "I called safety before the shot (not a foul)") : null
+      safety ? h("button", { type: "button", class: "choice safe", "aria-pressed": String(shot.safety), on: { click: () => ((shot.safety = !shot.safety), draw()) } }, "I called safety before the shot (not a foul)") : null,
+      safety ? h("button", { type: "button", class: "choice safe", "aria-pressed": String(shot.uncalled), on: { click: () => ((shot.uncalled = !shot.uncalled), draw()) } }, "A ball went in, but not the one I called (not a foul, my turn ends)") : null
     )
   );
-  d.open = !!shot.other || !!shot.safety;
+  d.open = (!!shot.other && shot.other !== "off") || !!shot.safety || !!shot.uncalled;
   return d;
 }
 
@@ -361,6 +436,7 @@ function clean(e) {
   if (e.eight) out.eight = e.eight;
   if (e.safety) out.safety = true;
   if (e.called) out.called = e.called;
+  if (e.uncalled) out.uncalled = true;
   return out;
 }
 
@@ -461,7 +537,7 @@ function logRows(s) {
   }
   flush();
   return rows.reverse().map((r) => {
-    if (r.balls) return h("li", {}, h("span", { class: "who", text: n[r.p] }), h("span", { class: "balls" }, r.brk ? h("small", { text: "break " }) : null, r.balls.map((x) => pdot(x))), h("span", { class: "pts", text: `${r.balls.length}` }));
+    if (r.balls) return h("li", {}, h("span", { class: "who", text: n[r.p] }), h("span", { class: "balls" }, r.brk ? h("small", { text: "break " }) : null, r.balls.map((x) => pdot(x))), h("span", { class: "pts", text: "" }));
     if (r.t === "shot" && r.result === "foul") return h("li", { class: "foul" }, h("span", { class: "who", text: n[r.p] }), h("span", { class: "balls" }, `Foul${r.white ? " (white in)" : ""} → ball in hand`, ...r.potted.map((x) => pdot(x))), h("span", { class: "pts", text: "" }));
     if (r.t === "shot" && (r.result === "win" || r.result === "loss")) return h("li", { class: r.result === "loss" ? "foul" : "" }, h("span", { class: "who", text: n[r.p] }), h("span", { class: "balls" }, r.result === "win" ? "Potted the 8: wins" : "Lost on the 8", pdot(8)), h("span", { class: "pts", text: "" }));
     if (r.t === "shot" && r.result === "choice") return h("li", { class: "info", text: `${n[r.p]}'s break: ${r.potted.includes(8) ? "the 8 went in" : "illegal or foul break"}` });
