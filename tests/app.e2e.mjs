@@ -19,9 +19,13 @@ const errors = [];
 
 async function phone() {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
-  const net = { down: false }; // no signal: every request to the Worker fails
+  const net = { down: false, fail: 0 }; // no signal: every request fails · fail: the next n moves get a 500
   await ctx.route(`${API}/**`, async (route) => {
     if (net.down) return route.abort("internetdisconnected");
+    if (net.fail && route.request().method() === "POST") {
+      net.fail--;
+      return route.fulfill({ status: 500, contentType: "application/json", body: '{"error":"server_error","message":"Something went wrong. Try again."}' });
+    }
     const req = route.request();
     // like a real phone signal: moves take a while, and a later one can overtake an earlier one
     if (req.method() === "POST") await new Promise((r) => setTimeout(r, (posts++ % 2 ? 40 : 450)));
@@ -33,6 +37,7 @@ async function phone() {
     await route.fulfill({ status: res.status, headers: Object.fromEntries(res.headers), body: await res.text() });
   });
   const page = await ctx.newPage();
+  page.failNext = (n) => (net.fail = n);
   page.signal = async (on) => {
     net.down = !on;
     await ctx.setOffline(!on);
@@ -126,9 +131,13 @@ try {
     assert.equal(await score(p, 0), "1", "the first tap only calls it");
     assert.match(await p.textContent("#guide"), /Going for the pink/);
     assert.equal(await p.textContent('.pad [data-ball="pink"] .tag'), "CALLED");
+    // another colour after a call: changing the call, or did that one go in (a foul)?
     await p.click('.pad [data-ball="blue"]');
+    assert.match(await p.textContent("#sheet"), /You called the pink/);
+    await p.click('#sheet button:has-text("Change my call to the blue")');
     assert.match(await p.textContent("#guide"), /Going for the blue/, "changing your mind changes the call");
     await p.click('.pad [data-ball="pink"]');
+    await p.click('#sheet button:has-text("Change my call to the pink")');
     await p.click('.pad [data-ball="pink"]');
     assert.equal(await score(p, 0), "7");
     // the pink must go back before anything else: a pop-up shows where
@@ -239,6 +248,19 @@ try {
     await p.fill(".ask-input", "what is a frame");
     assert.match(await p.locator("#sheet details.qa").first().textContent(), /one game/);
     await p.click("#sheet .close");
+  });
+
+  await step("the phone's Back button comes home (the match stays saved), and a broken link says so", async () => {
+    await p.goBack();
+    await p.waitForSelector("#view-home:not([hidden])");
+    await p.click("#resume .resume-row .btn.big");
+    await p.waitForSelector("#view-game:not([hidden])");
+    assert.equal(await score(p, 1), "11");
+    const bad = await phone();
+    await bad.goto(`${SITE}?g=abc`);
+    await bad.waitForSelector("#view-join:not([hidden])");
+    assert.match(await bad.textContent("#join-card"), /doesn't look right/);
+    await bad.close();
   });
 
   await step("restart the game, start the match over, delete it", async () => {
@@ -456,6 +478,7 @@ try {
     await mine.waitForSelector("#frame-tag >> text=offline · 2 waiting to send", { timeout: 12000 });
     assert.equal(await mine.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("chalk.outbox.")).length), 1, "kept on the phone, even through a reload");
     assert.equal(await score(theirs, me), String(before), "the other phone hasn't had them yet");
+    mine.failNext(1); // and the Worker has a hiccup on the first try: the moves wait and go again
     await mine.signal(true);
     await theirs.waitForFunction(([p, n]) => document.querySelectorAll(".player .p-score")[p].textContent === n, [me, String(before + 1)], { timeout: 20000 });
     await theirs.waitForFunction(() => !document.querySelector(".pad .red").disabled, null, { timeout: 8000 });

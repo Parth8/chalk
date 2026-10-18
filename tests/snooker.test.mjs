@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { startFrame, apply, judgePot, penalty, remaining, standing, ballsOn, newMatch, replayFrame, framesWon, nextFrame } from "../js/snooker/engine.js";
+import { startFrame, apply, judgePot, judgeShot, penalty, remaining, standing, ballsOn, newMatch, replayFrame, framesWon, nextFrame } from "../js/snooker/engine.js";
 
 const run = (s, ...events) => events.reduce(apply, s);
 const pot = (ball, extra) => (extra ? { t: "pot", ball, extra: true } : { t: "pot", ball });
@@ -306,4 +306,52 @@ test("judgeShot rules on a described shot", async () => {
   assert.equal(r.result, "pot");
   assert.equal(r.pts, 1);
   assert.equal(r.events.reduce(apply, free).scores[1], 4 + 1);
+});
+
+
+test("free ball with a red in the same shot: both score, and the free ball still comes back", () => {
+  let s = run(fresh(), pot("red"), pot("black"), { t: "miss" }, { t: "foul", kind: "wrong-first", hit: "pink" }, { t: "free" });
+  assert.equal(s.free, true);
+  const r = judgeShot(s, { first: "yellow", reds: 1, colours: ["yellow"] });
+  assert.equal(r.result, "pot");
+  assert.equal(r.pts, 2);
+  const after = run(s, ...r.events);
+  assert.deepEqual(after.toSpot, ["yellow"], "the yellow goes back");
+});
+
+test("free ball and the ball on both down in the clearance: only the ball on scores, the free ball comes back", () => {
+  let s = run(fresh(1), pot("red"), pot("black"), { t: "miss" }, { t: "foul", kind: "wrong-first", hit: "green" }, { t: "free" });
+  assert.equal(s.phase, "clear");
+  for (const order of [["green", "yellow"], ["yellow", "green"]]) {
+    const r = judgeShot(s, { first: "green", colours: order });
+    assert.equal(r.pts, 2, "the yellow (ball on) scores 2");
+    const after = run(s, ...r.events);
+    assert.equal(after.next, 1, "the yellow stays down: on to the green");
+    assert.deepEqual(after.toSpot, ["green"], "the free ball goes back");
+  }
+});
+
+test("after 'put the balls back', a red is a new shot, not another red in the same one", () => {
+  const s = run(fresh(), pot("red"), { t: "foul", kind: "nothing" }, { t: "replace" });
+  assert.equal(s.lastRed, false);
+});
+
+test("a foul that ends the game leaves nothing to put back", () => {
+  const s = run(fresh(1), pot("red"), pot("black"), ...["yellow", "green", "brown", "blue", "pink"].map((b) => pot(b)), { t: "foul", kind: "wrong-pot", hit: "black", colours: ["black"], white: true });
+  assert.equal(s.over, true);
+  assert.deepEqual(s.toSpot, []);
+});
+
+test("'foul and a miss' only when the white didn't hit the ball on first", () => {
+  assert.equal(run(fresh(), { t: "foul", kind: "nothing" }).foul.missable, true);
+  assert.equal(run(fresh(), { t: "foul", kind: "wrong-first", hit: "blue" }).foul.missable, true);
+  assert.equal(run(fresh(), { t: "foul", kind: "white", hit: "red", white: true }).foul.missable, false, "an in-off after hitting a red");
+});
+
+test("a ball forced off the table is a foul, not a pot", () => {
+  const s = run(fresh(), pot("red"), { t: "call", ball: "blue" });
+  const r = judgeShot(s, { first: "blue", colours: ["blue"], other: "off" });
+  assert.equal(r.result, "foul");
+  assert.equal(r.pen, 5);
+  assert.deepEqual(run(s, ...r.events).toSpot, ["blue"], "it comes back on its spot");
 });

@@ -781,6 +781,7 @@ const SNOOKER = (() => {
     early: "Played before the balls stopped",
     "outside-d": "Played from outside the D with the white in hand",
     seven: "A 7-point foul: reds twice in a row, or used a ball to measure",
+    off: "A ball was forced off the table",
   };
 
   /**
@@ -817,7 +818,7 @@ const SNOOKER = (() => {
     }
 
     if (reasons.length) {
-      const kind = shot.other === "seven" ? "seven" : shot.other === "outside-d" ? "outside-d" : shot.other ? "touch" : shot.white ? "white" : first === "nothing" ? "nothing" : !on.includes(first) ? "wrong-first" : "wrong-pot";
+      const kind = shot.other === "seven" ? "seven" : shot.other === "outside-d" ? "outside-d" : shot.other === "off" ? "off" : shot.other ? "touch" : shot.white ? "white" : first === "nothing" ? "nothing" : !on.includes(first) ? "wrong-first" : "wrong-pot";
       const ev = { t: "foul", kind };
       if (BALLS.includes(first)) ev.hit = first;
       if (reds) ev.reds = reds;

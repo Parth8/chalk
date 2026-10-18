@@ -272,3 +272,22 @@ test("doubles: a side joins with its team, and teams are checked", async () => {
   assert.deepEqual(b.body.game.teams, [["Asha", "Ben"], null], "singles on the other side");
   assert.deepEqual(b.body.game.players, ["Asha & Ben", "Cat"]);
 });
+
+test("a restart of a different kind is a new request, not agreement", async () => {
+  const env = setup();
+  const g = await game(env);
+  const at = g.breaker;
+  await g.act(at, { t: "pot", ball: "red" });
+  await g.act(at, { t: "restart", all: true });
+  const r = await g.act(1 - at, { t: "restart" });
+  assert.equal(r.body.game.frames[0].events.length, 1, "nothing wiped");
+  assert.deepEqual(r.body.game.frames[0].ask, { by: 1 - at, all: false });
+});
+
+test("invisible characters can't make an empty or disguised name", async () => {
+  const env = setup();
+  const id = (await call(env, "POST", "/api/games", { reds: 6 })).body.id;
+  assert.equal((await call(env, "POST", `/api/games/${id}/join`, { name: "\u2060\u3164\u2800\u00ad" })).status, 400);
+  const a = await call(env, "POST", `/api/games/${id}/join`, { name: "As\u2060ha" });
+  assert.deepEqual(a.body.game.players, ["Asha", null]);
+});

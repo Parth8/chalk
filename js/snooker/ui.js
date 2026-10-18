@@ -148,7 +148,7 @@ function onCard(s, me) {
   } else if (s.phase === "colour") {
     on = s.called;
     title = `Going for the ${s.called} (${VALUE[s.called]})`;
-    text = `Tap the ${s.called} again when it goes in. Changed your mind? Tap another colour.`;
+    text = `Tap the ${s.called} again when it goes in. Changed your mind? Tap the colour you want instead.`;
   } else {
     title = `${cap(on)} (${VALUE[on]})`;
     text = "Colours in order now. They stay down.";
@@ -189,7 +189,8 @@ function spotCard(s) {
 function onBall(ball) {
   const s = state();
   if (!can("turn", s)) return;
-  if (s.phase === "colour" && ball !== "red" && s.called !== ball) return act({ t: "call", ball });
+  if (s.phase === "colour" && ball !== "red" && !s.called) return act({ t: "call", ball });
+  if (s.phase === "colour" && ball !== "red" && s.called !== ball) return otherColourSheet(s, ball);
   const j = judgePot(s, ball);
   if (j.ok && j.extra) return act({ t: "pot", ball, extra: true }); // the button says "another red in, same shot"
   if (j.ok) return act({ t: "pot", ball });
@@ -238,6 +239,20 @@ function padHint(s) {
   if (s.phase === "colour" && !s.called) return "Tap a colour to call it.";
   if (s.phase === "colour") return `Called the ${s.called}: tap it again when it goes in, or tap Missed.`;
   return `Tap the ${COLOURS[s.next]} when it goes in, or tap Missed.`;
+}
+
+/** A colour was called, and another one tapped: changing the call, or did that one go in? */
+function otherColourSheet(s, ball) {
+  openSheet(
+    `You called the ${s.called}`,
+    h("p", { class: "lead-text", text: `And you tapped the ${ball}. Which is it?` }),
+    btn(`Change my call to the ${ball}`, () => {
+      closeSheet();
+      act({ t: "call", ball });
+    }, "btn primary big"),
+    btn(`The ${ball} went in instead`, () => shotSheet({ colours: [ball] }, `You called the ${s.called}, and the ${ball} went in. What did the white hit first?`), "btn big"),
+    h("p", { class: "note", text: "Potting a colour you didn't call is a foul." })
+  );
 }
 
 /* ---------------- sheets: free ball, foul and a miss, What happened? ---------------- */
@@ -314,7 +329,7 @@ function shotSheet(prefill = {}, intro = "") {
     // 2. what went in
     const none = !shot.white && !shot.reds && !shot.colours.size;
     parts.push(
-      h("h3", { text: "2. What went in? (or flew off the table)" }),
+      h("h3", { text: "2. What went in?" }),
       h(
         "div",
         { class: "chips" },
@@ -333,6 +348,12 @@ function shotSheet(prefill = {}, intro = "") {
       )
     );
 
+    // a ball off the table is a foul (reds stay off, colours come back), not a pot: asked on its own
+    parts.push(
+      h("h3", { text: "Did a ball jump off the table?" }),
+      h("div", { class: "chips" }, chip("No", shot.other !== "off", set(() => shot.other === "off" && (shot.other = null))), chip("Yes (tick it above too)", shot.other === "off", set(() => (shot.other = "off"))))
+    );
+
     // a colour hadn't been called yet and the white didn't hit one: which were they going for?
     if (s.phase === "colour" && !s.called && shot.first && !COLOURS.includes(shot.first)) {
       parts.push(
@@ -345,16 +366,16 @@ function shotSheet(prefill = {}, intro = "") {
     const more = h(
       "details",
       { class: "more" },
-      h("summary", { text: shot.other ? `3. Also: ${OTHER_FOULS[shot.other].toLowerCase()}` : "3. Anything else? (touched a ball, push, jump…)" }),
+      h("summary", { text: shot.other && shot.other !== "off" ? `3. Also: ${OTHER_FOULS[shot.other].toLowerCase()}` : "3. Anything else? (touched a ball, push, jump…)" }),
       h(
         "div",
         { class: "choices" },
         Object.entries(OTHER_FOULS)
-          .filter(([k]) => k !== "outside-d" || s.inHand)
+          .filter(([k]) => k !== "off" && (k !== "outside-d" || s.inHand))
           .map(([k, label]) => h("button", { type: "button", class: "choice", "aria-pressed": String(shot.other === k), on: { click: set(() => (shot.other = shot.other === k ? null : k)) } }, label))
       )
     );
-    more.open = !!shot.other;
+    more.open = !!shot.other && shot.other !== "off";
     parts.push(more);
     parts.push(shot.first ? verdict(s, shot, me, opp) : h("div", { class: "verdict" }, h("p", { text: "Pick what the white hit first." })));
     body.replaceChildren(...parts);

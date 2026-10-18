@@ -410,7 +410,7 @@ function offRow(shot, draw) {
 /** "Anything else?": the less common fouls, safety, and a called ball that didn't drop. */
 function moreFouls(s, shot, draw, safety = false) {
   const list = Object.entries(OTHER_FOULS).filter(([k]) => k !== "off" && (k !== "placement" || s.inHand === "kitchen"));
-  const said = shot.other && shot.other !== "off" ? `Also: ${OTHER_FOULS[shot.other].toLowerCase()}` : shot.safety ? "Also: called safety" : shot.uncalled ? "Also: the called ball didn't go in" : "Anything else? (touched a ball, double hit, safety…)";
+  const said = shot.other && shot.other !== "off" ? `Also: ${OTHER_FOULS[shot.other].toLowerCase()}` : shot.safety ? "Also: called safety" : shot.uncalled ? "Also: the called ball didn't go in" : safety ? "Anything else? (touched a ball, double hit, safety…)" : "Anything else? (touched a ball, double hit…)";
   const d = h(
     "details",
     { class: "more" },

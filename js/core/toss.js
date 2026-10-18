@@ -24,6 +24,7 @@ export function tossSheet({ title = "Coin toss", intro = "", names, after }) {
     coin.classList.add("spin", winner ? "show-tails" : "show-heads");
     const reveal = () => {
       result.replaceChildren(h("p", { class: "toss-call", text: `${winner ? "Tails" : "Heads"}! ${names[winner]} wins the toss.` }), ...(after ? after(winner) : []));
+      result.scrollIntoView({ block: "nearest", behavior: "smooth" }); // the result's buttons can be below a small screen
     };
     setTimeout(reveal, matchMedia("(prefers-reduced-motion: reduce)").matches ? 50 : SPIN_MS);
   }, "btn primary big");

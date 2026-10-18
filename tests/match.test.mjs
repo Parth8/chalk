@@ -95,3 +95,19 @@ test("doubles in pool: 'make them break again' gives the break back to the same 
   assert.equal(playerUp(m, replay(m).turn), "Ann", "Ann broke, Ann breaks again");
   assert.deepEqual(visits(m), [1, 0]);
 });
+
+test("shared restarts: one side asks; the same kind from the other side agrees, a different kind asks again", async () => {
+  const { restartMove } = await import("../js/core/match.js");
+  let m = createMatch({ game: "pool", players: ["A", "B"], target: 3 });
+  m = play(m, { t: "concede", who: 1 }, { t: "next" });
+  m = applyMove(m, { t: "shot", potted: [] }, 0);
+  m = applyMove(m, { t: "restart", all: true }, 0);
+  assert.deepEqual(m.frames.at(-1).ask, { by: 0, all: true });
+  const game = applyMove(m, { t: "restart" }, 1);
+  assert.deepEqual(game.frames.at(-1).ask, { by: 1, all: false }, "a game restart isn't agreeing to start the match over");
+  assert.equal(game.frames.length, 2);
+  const all = applyMove(m, { t: "restart", all: true }, 1);
+  assert.deepEqual(all.frames, [{ breaker: 0, events: [], restarts: 1 }]);
+  assert.equal(applyMove(m, { t: "restart-no" }, 1).frames.at(-1).ask, undefined);
+  assert.equal(restartMove(m, { t: "restart" }, null), m, "one phone: restarts don't go through moves");
+});
