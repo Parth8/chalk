@@ -17,14 +17,35 @@ export const session = {
 
 const listeners = new Set();
 export const onChange = (fn) => listeners.add(fn);
-export const changed = () => listeners.forEach((fn) => fn());
+export const changed = () => {
+  trackHistory();
+  listeners.forEach((fn) => fn());
+};
+
+/**
+ * A count that goes up whenever the moves of the game on screen are taken back or replaced
+ * (undo, a restart, another match), rather than added to. Pop-ups are keyed with it, so a
+ * different foul at the same point after an undo gets its own card instead of looking dismissed.
+ */
+const history = { gen: 0, match: null, frame: 0, moves: [] };
+function trackHistory() {
+  if (!session.match || !session.match.frames.length) return; // a shared game still in its lobby
+  const match = `${session.mode}:${session.id}:${session.match.players.join("|")}`;
+  const frame = frameNo();
+  const moves = eventsNow().map((e) => JSON.stringify(e));
+  const same = match === history.match;
+  const nextGame = same && frame > history.frame;
+  const addedTo = same && frame === history.frame && moves.length >= history.moves.length && history.moves.every((m, i) => m === moves[i]);
+  if (!addedTo && !nextGame) history.gen++;
+  Object.assign(history, { match, frame, moves });
+}
 
 export const state = () => replay(session.match);
 export const names = () => sideNames(session.match);
 export const frameNo = () => session.match.frames.length;
 export const eventsNow = () => session.match.frames[session.match.frames.length - 1].events;
 /** Changes whenever a move is made or taken back: keys pop-ups to the moment they belong to. */
-export const evKey = () => `${frameNo()}:${eventsNow().length}`;
+export const evKey = () => `${history.gen}:${frameNo()}:${eventsNow().length}`;
 /**
  * Changes with each new game and each restart: keys "set up the table" to the game it's for.
  * A match on this phone counts as new each time it's opened (a new match, or carrying on later).
@@ -78,6 +99,7 @@ export function act(e) {
 
 export function openLocal(m) {
   opened++;
+  history.gen++;
   Object.assign(session, { mode: "local", id: null, match: m, seat: null, ready: true, send: null });
   saveLocal();
   changed();

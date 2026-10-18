@@ -339,7 +339,7 @@ try {
     await p.click('[data-open="menu"]');
     await p.click('#sheet button:has-text("Cal & Dev gives up")');
     assert.match(await p.textContent("#guide"), /Pinks wins/);
-    await p.click('#guide button:has-text("Play game 2 · Dev breaks")'); // a new game starts one player on
+    await p.click('#guide button:has-text("Play game 2 · Cal breaks")'); // the other team's turn to break
     await tableReady(p);
     await p.click('[data-open="menu"]');
     await p.click('#sheet button:has-text("Cal & Dev gives up")');
@@ -503,7 +503,7 @@ try {
 
   await step("pool: an illegal break lets the other player choose; a re-rack asks to rack again", async () => {
     await q.click("#btn-miss");
-    await q.click('#sheet .chips >> nth=1 >> button:has-text("No")');
+    await q.click('#sheet h3:has-text("4 balls") + .chips button:has-text("No")');
     assert.match(await q.textContent("#sheet .verdict"), /Ben chooses what happens next/);
     assert.match(await q.textContent("#sheet .verdict"), /illegal break/);
     await q.click("#sheet .verdict .btn");
@@ -543,6 +543,9 @@ try {
     for (const n of [1, 2, 4, 6, 7]) await q.click(`.pball[data-n="${n}"]`);
     assert.match(await q.textContent("#guide"), /Pot the 8 to win/);
     await q.click('.pball[data-n="8"]');
+    // straight after the 7: was it the same shot? (that would lose: the 8 must be the last ball)
+    assert.match(await q.textContent("#sheet"), /same shot/);
+    await q.click('#sheet button:has-text("A new shot")');
     assert.match(await q.textContent("#sheet"), /Did it go in the pocket/);
     await q.click('#sheet button:has-text("Yes: Asha wins")');
     assert.match(await q.textContent("#guide"), /Asha wins/);

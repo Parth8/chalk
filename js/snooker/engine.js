@@ -129,6 +129,7 @@ function finish(s) {
   }
   s.over = true;
   s.winner = s.scores[0] > s.scores[1] ? 0 : 1;
+  s.toSpot = []; // the game's over: nothing goes back on the table
 }
 
 const endVisit = (s) => {
@@ -141,12 +142,15 @@ const endVisit = (s) => {
 /** Apply one event and return the new state. Throws on an event the rules don't allow here. */
 export function apply(prev, e) {
   const s = structuredClone(prev);
+  const spotting = s.toSpot;
   s.toSpot = [];
   switch (e.t) {
     case "pot": {
       const j = judgePot(s, e.ball);
       if (!j.ok) throw new Error(`illegal pot: ${e.ball} (${j.reason})`);
       if (j.extra && !e.extra) throw new Error("second red needs confirming");
+      if (e.respot && !s.free) throw new Error("only a free ball comes back with the ball on");
+      if (e.extra) s.toSpot = spotting; // the same shot as the last pot: whatever it put back still goes back
       const p = s.turn;
       if (j.free) {
         s.toSpot = [e.ball];
@@ -167,6 +171,8 @@ export function apply(prev, e) {
         s.next++;
         s.lastRed = false;
       }
+      // free ball and ball on both down in the same shot: only the ball on scores; the free ball comes back
+      if (e.respot) s.toSpot = byValue([...s.toSpot, ...e.respot]);
       s.called = null;
       s.scores[p] += j.pts;
       s.brk += j.pts;
@@ -195,6 +201,9 @@ export function apply(prev, e) {
     case "foul": {
       if (s.over || s.toss) throw new Error("no one at the table");
       const { pen, why } = penalty(s, e);
+      // "foul and a miss" only fits when the white failed to hit the ball on first
+      const onNow = s.phase === "colour" && (s.called || e.called) ? [s.called || e.called] : firstOn(s);
+      const missable = !e.hit || !onNow.includes(e.hit);
       const by = s.turn;
       const opp = 1 - by;
       const snap = { reds: s.reds, phase: s.phase, next: s.next, inHand: s.inHand, free: s.free, lastRed: s.lastRed, called: s.called };
@@ -216,7 +225,7 @@ export function apply(prev, e) {
         if (s.phase === "clear") s.next = 0;
       }
       s.inHand = !!e.white;
-      s.foul = { by, pen, why, snap };
+      s.foul = { by, pen, why, snap, missable };
       return s;
     }
     case "again": // the incoming player makes the offender play again from where the balls are
@@ -227,7 +236,7 @@ export function apply(prev, e) {
       if (e.t === "replace") Object.assign(s, snap);
       else s.called = null;
       s.free = false;
-      s.lastRed = e.t === "replace" ? snap.lastRed : false;
+      s.lastRed = false; // either way it's a new stroke, so a red now isn't part of an earlier shot
       s.turn = by;
       s.foul = null;
       s.log.push({ t: e.t, p: by });
@@ -337,6 +346,13 @@ export function judgeShot(s, shot) {
 
   const events = [];
   let pts = 0;
+  if (freeBall && s.phase === "clear" && colours.includes(COLOURS[s.next])) {
+    // the free ball and the ball on both went in: only the ball on scores, and the free ball comes back
+    const ball = COLOURS[s.next];
+    const pot = { t: "pot", ball };
+    if (colours.includes(first)) pot.respot = [first];
+    return { result: "pot", events: [pot], reasons: [], pts: VALUE[ball] };
+  }
   if (freeBall && colours.length) {
     events.push({ t: "pot", ball: colours[0] });
     pts += s.phase === "red" ? 1 : VALUE[COLOURS[s.next]];

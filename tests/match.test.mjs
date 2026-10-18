@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createMatch, matchWinner, gamesNeeded, gamesWon, nextGame, applyMove, playerUp, visits, replay, cleanTeam, targetWords } from "../js/core/match.js";
+import { createMatch, matchWinner, gamesNeeded, gamesWon, nextGame, applyMove, playerUp, playerNext, visits, replay, cleanTeam, targetWords } from "../js/core/match.js";
 
 const play = (m, ...moves) => moves.reduce((acc, e) => applyMove(acc, e), m);
 
@@ -67,10 +67,19 @@ test("doubles: partners take turns at the table, and each game starts one player
   m = applyMove(m, { t: "again" });
   assert.equal(up(), "Dev", "made to play again: Dev carries on, and it wasn't a visit for the Pinks");
   assert.deepEqual(visits(m), [2, 2]);
-  assert.equal(playerUp(m, 1, 1), "Dev", "game 2: the Blues break, starting one player on");
+  assert.equal(playerNext(m, 0), "Ann", "the Pinks' next visit: round to Ann again");
+  assert.equal(playerUp(m, 1, 1), "Cal", "game 2: the Blues break for the first time, Cal first");
   m = play(m, { t: "concede", who: 0 }, { t: "next" });
-  assert.equal(up(), "Dev");
-  assert.equal(playerUp(m, 0), "Bea");
+  assert.equal(up(), "Cal");
+  assert.equal(playerNext(m, 0), "Ann", "the Pinks come in second for the first time");
+  // every player gets to break: A1, B1, A2, B2, A1…
+  const breakers = [];
+  let g = createMatch({ game: "pool", players: ["A", "B"], teams: [["A1", "A2"], ["B1", "B2"]] });
+  for (let k = 0; k < 5; k++) {
+    breakers.push(playerUp(g, replay(g).turn));
+    g = play(g, { t: "concede", who: 0 }, { t: "next" });
+  }
+  assert.deepEqual(breakers, ["A1", "B1", "A2", "B2", "A1"]);
   assert.equal(playerUp(createMatch({ game: "pool", players: ["A", "B"] }), 0), "A", "singles: the side's name");
 });
 

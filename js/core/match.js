@@ -70,6 +70,10 @@ export function visits(m, i = m.frames.length - 1) {
   for (const e of f.events) {
     const before = s.turn;
     s = E.apply(s, e);
+    if (e.t === "toss") {
+      count[s.turn]++; // snooker's re-spotted black: whoever plays it starts a new visit
+      continue;
+    }
     if (s.turn === before) continue;
     // made to play again, or (pool) a choice that hands the break back: the same player carries on,
     // and the side that chose didn't have a visit
@@ -79,16 +83,36 @@ export function visits(m, i = m.frames.length - 1) {
   return count;
 }
 
+/** Who breaks game i (i can be one past the last game: the next one). */
+const breakerOf = (m, i) => (i < m.frames.length ? m.frames[i].breaker : 1 - m.frames[m.frames.length - 1].breaker);
+
 /**
- * Who's at the table for a side: the side's name, or in a team the player whose turn it is.
- * Players take visits in order (A1, B1, A2, B2, …); each new game starts one player further on.
- * i can be one past the last game, for who will break the next one.
+ * Where a side's rotation starts in game i. Sides break in turn, and each time a side breaks (or
+ * comes in second) it starts one player further on than the last time, so everyone gets to break.
+ */
+function rotation(m, side, i) {
+  const breaks = breakerOf(m, i) === side;
+  let n = 0;
+  for (let j = 0; j < i; j++) if ((breakerOf(m, j) === side) === breaks) n++;
+  return n;
+}
+
+/**
+ * Who's at the table for a side: the side's name, or in a team the player whose turn it is
+ * (players take visits in order: A1, B1, A2, B2, …).
  */
 export function playerUp(m, side, i = m.frames.length - 1) {
   const team = m.teams?.[side];
   if (!team || team.length < 2) return sideName(m, side);
-  const n = i < m.frames.length ? Math.max(0, visits(m, i)[side] - 1) : 0; // i past the end: the next game
-  return team[(i + n) % team.length];
+  const n = i < m.frames.length ? Math.max(0, visits(m, i)[side] - 1) : 0;
+  return team[(rotation(m, side, i) + n) % team.length];
+}
+
+/** The player who'll be at the table on a side's next visit (doubles), or the side's name. */
+export function playerNext(m, side, i = m.frames.length - 1) {
+  const team = m.teams?.[side];
+  if (!team || team.length < 2) return sideName(m, side);
+  return team[(rotation(m, side, i) + visits(m, i)[side]) % team.length];
 }
 
 /**

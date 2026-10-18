@@ -9,11 +9,12 @@ import { h, btn, cap, cardWithPicture } from "../core/dom.js";
 import { openSheet, closeSheet } from "../core/sheet.js";
 import { session, act, can, changed, state, names, eventsNow, evKey, frameNo, gameKey, isShared } from "../core/session.js";
 import { lessonSheet } from "../core/lessons.js";
-import { playerUp } from "../core/match.js";
+import { playerUp, playerNext } from "../core/match.js";
 import { tossSheet } from "../core/toss.js";
 
 const dot = (ball, cls = "dot") => h("span", { class: cls, "data-ball": ball, "aria-hidden": "true" });
 const up = (s) => playerUp(session.match, s.turn); // who's at the table (a player's name in doubles)
+const nextUp = (side) => playerNext(session.match, side); // who comes in next for a side
 
 /** Pop-up progress that belongs to this phone only. */
 const local = { setupDone: new Set(), spot: { key: "", step: 0, fall: 0 }, spotDone: "", foulDone: "" };
@@ -95,14 +96,14 @@ function guide(s) {
 }
 
 function foulCard(s, n) {
-  const off = n[s.foul.by];
-  const inc = n[s.turn];
+  const off = playerUp(session.match, s.foul.by); // the player who fouled
+  const inc = up(s); // the player coming in
   const showD = () => openSheet("White in hand", h("p", { class: "lead-text", text: "Anywhere inside the D, or on its lines. Pick it up and move it as often as you like until you play. Any direction is fine." }), h("div", { class: "table-wrap", html: tableSVG({ d: true }) }));
   return h(
     "div",
     { class: "g-card foul", "data-key": `foul-${evKey()}` },
     h("p", { class: "g-kicker", text: `Foul by ${off}` }),
-    h("p", { class: "g-title", text: `${s.foul.pen} points to ${inc}` }),
+    h("p", { class: "g-title", text: `${s.foul.pen} points to ${n[s.turn]}` }),
     h("p", { class: "g-text" }, cap(s.foul.why), ". ", s.inHand ? [h("b", { text: "White in hand: anywhere in the D." }), " ", btn("Show me", showD, "link")] : "Play from where the white stopped. It's not ball in hand."),
     can("turn", s)
       ? h(
@@ -114,9 +115,10 @@ function foulCard(s, n) {
           }, "btn primary"),
           btn(`${off} plays again`, () => act({ t: "again" })),
           btn("Free ball (I'm snookered)", freeBallSheet),
-          btn("Put balls back (miss)", () => missSheet(off))
+          s.foul.missable ? btn("Put balls back (miss)", () => missSheet(off)) : null
         )
-      : h("p", { class: "g-text", text: `${inc} decides: play on, make ${off} play again, or take a free ball if snookered.` })
+      : h("p", { class: "g-text", text: `${inc} decides: play on, make ${off} play again, or take a free ball if snookered.` }),
+    can("turn", s) ? h("p", { class: "note", text: "Not sure? Tap I'll play: that's the usual choice." }) : null
   );
 }
 
@@ -195,7 +197,7 @@ function onBall(ball) {
       : s.phase === "colour"
         ? `You called the ${s.called}. What happened with the red?`
         : `You're on the ${COLOURS[s.next]}. What happened with the ${ball}?`;
-  shotSheet(ball === "red" ? { reds: 1 } : { first: ball }, intro);
+  shotSheet(ball === "red" ? { reds: 1 } : { colours: [ball] }, intro);
 }
 
 function pad(s) {
@@ -228,7 +230,7 @@ function pad(s) {
 
 /** One plain line under the balls: what to tap now. */
 function padHint(s) {
-  if (s.free) return "Free ball: tap the colour you potted as the free ball, or a red if a red went in.";
+  if (s.free) return s.phase === "red" ? "Free ball: tap the colour you potted as the free ball, or Red if a red went in." : "Free ball: tap the colour you potted as the free ball.";
   if (s.phase === "red") return "A red went in? Tap Red. Nothing went in? Tap Missed.";
   if (s.phase === "colour" && !s.called) return "Tap a colour to call it.";
   if (s.phase === "colour") return `Called the ${s.called}: tap it again when it goes in, or tap Missed.`;
@@ -271,8 +273,10 @@ function shotSheet(prefill = {}, intro = "") {
   const s = state();
   const n = names();
   const me = up(s);
-  const opp = n[1 - s.turn];
+  const opp = nextUp(1 - s.turn);
   const onFirst = firstOn(s);
+  // in the clearance, colours already potted are off the table: they can't be hit or go in
+  const onTable = (b) => (b === "red" ? s.reds > 0 : b === "white" || s.phase !== "clear" || COLOURS.indexOf(b) >= s.next);
   const shot = {
     first: prefill.first || (onFirst.length === 1 ? onFirst[0] : s.phase === "red" ? "red" : null),
     reds: prefill.reds || 0,
@@ -295,10 +299,13 @@ function shotSheet(prefill = {}, intro = "") {
     parts.push(h("p", { class: "lead-text" }, intro || "Tell me what happened and I'll work out the rest. ", intro ? null : ["You were on ", h("b", { text: onText }), "."]));
 
     // 1. first contact
-    const order = [...onFirst, ...BALLS.filter((b) => !onFirst.includes(b))].filter((b) => b !== "red" || s.reds > 0);
+    const order = [...onFirst, ...BALLS.filter((b) => !onFirst.includes(b))].filter(onTable);
     parts.push(
       h("h3", { text: "1. What did the white hit first?" }),
-      h("div", { class: "chips" }, order.map((b) => chip(cap(b), shot.first === b, set(() => (shot.first = b)), { ball: b, sub: onFirst.includes(b) ? "on" : null })), chip("Nothing", shot.first === "nothing", set(() => (shot.first = "nothing"))))
+      h("div", { class: "chips" }, order.map((b) => chip(cap(b), shot.first === b, set(() => {
+              shot.first = b;
+              if (COLOURS.includes(b)) shot.called = null; // the colour hit first is the one they were playing
+            }), { ball: b, sub: onFirst.includes(b) ? "on" : null })), chip("Nothing", shot.first === "nothing", set(() => (shot.first = "nothing"))))
     );
 
     // 2. what went in
@@ -319,7 +326,7 @@ function shotSheet(prefill = {}, intro = "") {
               h("span", { class: "stepper" }, btn("−", set(() => (shot.reds = Math.max(0, shot.reds - 1))), "", { "aria-label": "One red fewer" }), btn("+", set(() => (shot.reds = Math.min(s.reds, shot.reds + 1))), "", { "aria-label": "One more red" }))
             )
           : null,
-        COLOURS.map((c) => chip(cap(c), shot.colours.has(c), set(() => (shot.colours.has(c) ? shot.colours.delete(c) : shot.colours.add(c))), { ball: c }))
+        COLOURS.filter(onTable).map((c) => chip(cap(c), shot.colours.has(c), set(() => (shot.colours.has(c) ? shot.colours.delete(c) : shot.colours.add(c))), { ball: c }))
       )
     );
 
@@ -381,7 +388,7 @@ function verdict(s, shot, me, opp) {
 function gate(s) {
   const key = gameKey();
   if (!eventsNow().length && !s.over && !local.setupDone.has(key)) return { kind: "setup", key, everyone: true, open: () => setupSheet(key) };
-  if (s.toSpot.length && !s.toss && local.spotDone !== evKey()) return { kind: "spot", key: `spot-${evKey()}`, everyone: false, open: () => spotSheet(state()) };
+  if (s.toSpot.length && !s.toss && !s.over && local.spotDone !== evKey()) return { kind: "spot", key: `spot-${evKey()}`, everyone: false, open: () => spotSheet(state()) };
   return null;
 }
 
@@ -420,13 +427,20 @@ function setupSheet(key) {
 /** "Put the pink back": a pop-up that stays until the ball is back on the table. */
 function spotSheet(s) {
   const key = evKey();
-  if (local.spot.key !== key) local.spot = { key, step: 0, fall: 0 };
+  if (local.spot.key !== key || local.spot.step >= s.toSpot.length) local.spot = { key, step: 0, fall: 0 };
   const ball = s.toSpot[local.spot.step];
   const order = spotOrder(ball);
   const all = local.spot.fall >= order.length;
   const at = all ? ball : order[local.spot.fall];
   const later = s.toSpot.slice(local.spot.step + 1);
-  const why = s.foul ? "Colours that go in on a foul always come back." : s.reds > 0 || s.phase === "clear" ? "While there are reds left, colours come back on the table after they're potted." : "The colour after the last red comes back too. From now on they stay down.";
+  const lastPot = s.log.findLast((l) => l.t === "pot");
+  const why = s.foul
+    ? "Colours that go in on a foul always come back."
+    : lastPot && (lastPot.free || lastPot.ball !== ball)
+      ? "A colour potted as the free ball always comes back on its spot."
+      : s.reds > 0
+        ? "While there are reds left, colours come back on the table after they're potted."
+        : "The colour after the last red comes back too. From now on the colours stay down.";
   let where;
   if (all) where = `Every spot is covered: put it as close to its own spot as you can, towards the far cushion${ball === "pink" || ball === "black" ? " (if that's blocked, straight below its spot)" : ""}, not touching another ball.`;
   else if (at === ball) where = `On its own spot: ${SPOT_WORDS[ball]}.`;
@@ -453,7 +467,7 @@ function spotSheet(s) {
           spotSheet(state());
         }, "btn"),
     can("undo", s)
-      ? btn(`Oops, the ${ball} didn't go in (undo)`, () => {
+      ? btn(s.foul ? "Oops, undo that shot" : `Oops, the ${ball} didn't go in (undo)`, () => {
           closeSheet();
           act({ t: "undo" });
         }, "link")
@@ -491,7 +505,7 @@ function logRows(s) {
         h("span", { class: "balls" }, r.balls.map((b) => (b.free ? h("span", {}, dot(b.ball), h("span", { class: "free", text: " FREE" })) : dot(b.ball)))),
         h("span", { class: "pts", text: `+${r.pts}` })
       );
-    if (r.t === "foul") return h("li", { class: "foul" }, h("span", { class: "who", text: n[r.p] }), h("span", { class: "balls", text: `Foul${r.white ? " (in-off)" : ""} → ${n[r.to]}` }), h("span", { class: "pts", text: `+${r.pen}` }));
+    if (r.t === "foul") return h("li", { class: "foul" }, h("span", { class: "who", text: n[r.p] }), h("span", { class: "balls", text: `Foul${r.white ? " (white in)" : ""} → ${n[r.to]}` }), h("span", { class: "pts", text: `+${r.pen}` }));
     const info = { again: `${n[r.p]} plays again`, replace: `Foul and a miss: balls put back, ${n[r.p]} plays again`, free: `${n[r.p]} takes a free ball`, respot: "Level: re-spotted black", concede: `${n[r.p]} gave up this game` }[r.t];
     return info ? h("li", { class: "info", text: info }) : null;
   });
@@ -505,7 +519,7 @@ const undoLabel = (e) => (e.t === "pot" ? `the ${e.ball}` : e.t === "call" ? `${
 function result(s) {
   const n = names();
   return {
-    score: `${Math.max(...s.scores)}–${Math.min(...s.scores)}`,
+    score: `${s.scores[s.winner]}–${s.scores[1 - s.winner]}`,
     line: s.conceded !== null ? `${n[s.conceded]} gave up this game.` : `Highest breaks: ${n[0]} ${s.best[0]}, ${n[1]} ${s.best[1]}.`,
     note: `Snooker players call one game a "frame".`,
   };
@@ -515,7 +529,7 @@ function result(s) {
 function announce(s) {
   if (s.over || s.toss) return "";
   const who = up(s);
-  if (s.foul) return `Foul. ${s.foul.pen} points to ${names()[s.turn]}.`;
+  if (s.foul && local.foulDone !== evKey()) return `Foul. ${s.foul.pen} points to ${names()[s.turn]}. ${who} to play.`;
   if (s.free) return `${who}, free ball.`;
   if (s.phase === "red") return `${who}, pot a red.`;
   if (s.phase === "colour") return s.called ? `${who}, going for the ${s.called}.` : `${who}, call a colour.`;

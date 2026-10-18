@@ -5,7 +5,7 @@
 import { $, h, btn, markNew } from "../core/dom.js";
 import { sheet, closeSheet, isOpen, onSheetClose } from "../core/sheet.js";
 import { session, act, can, state, names, eventsNow, frameNo, isShared, restartLocal } from "../core/session.js";
-import { gamesWon, matchWinner, gamesNeeded, playerUp, targetWords, sideName } from "../core/match.js";
+import { gamesWon, matchWinner, gamesNeeded, playerUp, playerNext, targetWords, sideName } from "../core/match.js";
 import { tap, say } from "../core/sound.js";
 import { startTour, touring } from "../core/coach.js";
 import { shareCard } from "../core/share-card.js";
@@ -53,7 +53,7 @@ function renderPlayers(ui, s) {
       "div",
       { class: `player${at(p) ? " at" : ""}`, "aria-label": `${n[p]}: ${body.label}` },
       h("div", { class: "p-name" }, h("span", { text: n[p] }), isShared() && session.seat === p ? h("span", { class: "p-you", text: "YOU" }) : null),
-      team ? h("div", { class: "p-up", text: at(p) ? `${playerUp(m, p)} to play` : `next: ${playerUp(m, p)}` }) : null,
+      team ? h("div", { class: "p-up", text: at(p) ? `${playerUp(m, p)} to play` : `next: ${playerNext(m, p)}` }) : null,
       h("div", { class: `p-score ${ui.scoreClass}`, text: body.big }),
       h("div", { class: "p-sub" }, ...body.sub),
       body.extra || null
